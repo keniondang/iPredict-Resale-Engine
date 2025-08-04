@@ -1,0 +1,5 @@
+store_id,store_name,location_type,city
+1,Westfield Mall,Physical Store,Los Angeles
+2,Beverly Center,Physical Store,Los Angeles
+3,The Grove,Physical Store,Los Angeles
+4,Online Store,Online,N/A
