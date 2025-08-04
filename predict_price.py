@@ -59,9 +59,9 @@ if __name__ == "__main__":
     predictor = PricePredictor()
     
     result = predictor.predict(
-        model_name='iPhone 16 256GB',
+        model_name='iPhone 14 Pro Max 128GB',
         grade='A',
-        appraisal_date_str='2025-05-21'
+        appraisal_date_str='2025-07-15'
     )
     
     print("\nAppraisal Result:")
