@@ -116,7 +116,7 @@ if __name__ == "__main__":
     # Test Case 1: Price it shortly after acquisition
     result1 = predictor.predict(
         unit_id=unit_to_predict,
-        prediction_date_str='2024-11-02' # Assuming this is soon after acquisition
+        prediction_date_str='2024-6-02' # Assuming this is soon after acquisition
     )
     print("\nPrediction (Soon after acquisition):")
     print(result1)

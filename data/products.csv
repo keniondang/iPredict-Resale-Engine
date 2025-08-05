@@ -1,25 +1,119 @@
-model_name,model_tier,storage_gb,original_msrp,release_date,successor_release_date,product_type,compatible_tier,product_id
-iPhone 11 64GB,11.0,64.0,699,2019-09-20,2020-10-23,Used Phone,,1
-iPhone 11 Pro 64GB,11.5,64.0,999,2019-09-20,2020-10-23,Used Phone,,2
-iPhone 11 Pro Max 64GB,11.7,64.0,1099,2019-09-20,2020-10-23,Used Phone,,3
-iPhone 12 Mini 64GB,12.0,64.0,599,2020-11-13,2021-09-24,Used Phone,,4
-iPhone 12 64GB,12.2,64.0,799,2020-10-23,2021-09-24,Used Phone,,5
-iPhone 12 Pro 128GB,12.5,128.0,999,2020-10-23,2021-09-24,Used Phone,,6
-iPhone 12 Pro Max 128GB,12.7,128.0,1099,2020-11-13,2021-09-24,Used Phone,,7
-iPhone 13 Mini 128GB,13.0,128.0,699,2021-09-24,2022-09-16,Used Phone,,8
-iPhone 13 128GB,13.2,128.0,799,2021-09-24,2022-09-16,Used Phone,,9
-iPhone 13 Pro 128GB,13.5,128.0,999,2021-09-24,2022-09-16,Used Phone,,10
-iPhone 13 Pro Max 128GB,13.7,128.0,1099,2021-09-24,2022-09-16,Used Phone,,11
-iPhone 14 128GB,14.0,128.0,799,2022-09-16,2023-09-22,Used Phone,,12
-iPhone 14 Plus 128GB,14.2,128.0,899,2022-10-07,2023-09-22,Used Phone,,13
-iPhone 14 Pro 128GB,14.5,128.0,1099,2022-09-16,2023-09-22,Used Phone,,14
-iPhone 14 Pro Max 128GB,14.7,128.0,1199,2022-09-16,2023-09-22,Used Phone,,15
-iPhone 15 256GB,15.0,256.0,899,2023-09-22,2024-09-20,Used Phone,,16
-iPhone 15 Plus 256GB,15.2,256.0,999,2023-09-22,2024-09-20,Used Phone,,17
-iPhone 15 Pro 256GB,15.5,256.0,1199,2023-09-22,2024-09-20,Used Phone,,18
-iPhone 15 Pro Max 256GB,15.7,256.0,1399,2023-09-22,2024-09-20,Used Phone,,19
-iPhone 16 128GB,16.0,128.0,829,2024-09-20,,Used Phone,,20
-iPhone 16 Plus 128GB,16.2,128.0,929,2024-09-20,,Used Phone,,21
-iPhone 16 Pro 128GB,16.5,128.0,999,2024-09-20,,Used Phone,,22
-iPhone 16 Pro Max 256GB,16.7,256.0,1199,2024-09-20,,Used Phone,,23
-20W USB-C Power Adapter,,,19,,,Accessory,all,24
+model_name,model_tier,storage_gb,original_msrp,release_date,successor_release_date,form_factor,connector,product_type,compatibility,product_id
+iPhone 11 64GB,11.0,64.0,699,2019-09-20,2020-10-23,11,lightning,Used Phone,,1
+iPhone 11 128GB,11.0,128.0,749,2019-09-20,2020-10-23,11,lightning,Used Phone,,2
+iPhone 11 256GB,11.0,256.0,849,2019-09-20,2020-10-23,11,lightning,Used Phone,,3
+iPhone 11 Pro 64GB,11.5,64.0,999,2019-09-20,2020-10-23,11_pro,lightning,Used Phone,,4
+iPhone 11 Pro 256GB,11.5,256.0,1149,2019-09-20,2020-10-23,11_pro,lightning,Used Phone,,5
+iPhone 11 Pro 512GB,11.5,512.0,1349,2019-09-20,2020-10-23,11_pro,lightning,Used Phone,,6
+iPhone 11 Pro Max 64GB,11.7,64.0,1099,2019-09-20,2020-10-23,11_pro_max,lightning,Used Phone,,7
+iPhone 11 Pro Max 256GB,11.7,256.0,1249,2019-09-20,2020-10-23,11_pro_max,lightning,Used Phone,,8
+iPhone 11 Pro Max 512GB,11.7,512.0,1449,2019-09-20,2020-10-23,11_pro_max,lightning,Used Phone,,9
+iPhone 12 Mini 64GB,12.2,64.0,599,2020-11-13,2021-09-24,12_mini,lightning,Used Phone,,10
+iPhone 12 Mini 128GB,12.2,128.0,749,2020-11-13,2021-09-24,12_mini,lightning,Used Phone,,11
+iPhone 12 Mini 256GB,12.2,256.0,849,2020-11-13,2021-09-24,12_mini,lightning,Used Phone,,12
+iPhone 12 64GB,12.0,64.0,799,2020-10-23,2021-09-24,12_12pro,lightning,Used Phone,,13
+iPhone 12 128GB,12.0,128.0,849,2020-10-23,2021-09-24,12_12pro,lightning,Used Phone,,14
+iPhone 12 256GB,12.0,256.0,949,2020-10-23,2021-09-24,12_12pro,lightning,Used Phone,,15
+iPhone 12 Pro 128GB,12.5,128.0,999,2020-10-23,2021-09-24,12_12pro,lightning,Used Phone,,16
+iPhone 12 Pro 256GB,12.5,256.0,1099,2020-10-23,2021-09-24,12_12pro,lightning,Used Phone,,17
+iPhone 12 Pro 512GB,12.5,512.0,1299,2020-10-23,2021-09-24,12_12pro,lightning,Used Phone,,18
+iPhone 12 Pro Max 128GB,12.7,128.0,1099,2020-11-13,2021-09-24,12_pro_max,lightning,Used Phone,,19
+iPhone 12 Pro Max 256GB,12.7,256.0,1199,2020-11-13,2021-09-24,12_pro_max,lightning,Used Phone,,20
+iPhone 12 Pro Max 512GB,12.7,512.0,1399,2020-11-13,2021-09-24,12_pro_max,lightning,Used Phone,,21
+iPhone 13 Mini 128GB,13.2,128.0,699,2021-09-24,2022-09-16,13_mini,lightning,Used Phone,,22
+iPhone 13 Mini 256GB,13.2,256.0,799,2021-09-24,2022-09-16,13_mini,lightning,Used Phone,,23
+iPhone 13 Mini 512GB,13.2,512.0,999,2021-09-24,2022-09-16,13_mini,lightning,Used Phone,,24
+iPhone 13 128GB,13.0,128.0,799,2021-09-24,2022-09-16,13_13pro,lightning,Used Phone,,25
+iPhone 13 256GB,13.0,256.0,899,2021-09-24,2022-09-16,13_13pro,lightning,Used Phone,,26
+iPhone 13 512GB,13.0,512.0,1099,2021-09-24,2022-09-16,13_13pro,lightning,Used Phone,,27
+iPhone 13 Pro 128GB,13.5,128.0,999,2021-09-24,2022-09-16,13_13pro,lightning,Used Phone,,28
+iPhone 13 Pro 256GB,13.5,256.0,1099,2021-09-24,2022-09-16,13_13pro,lightning,Used Phone,,29
+iPhone 13 Pro 512GB,13.5,512.0,1299,2021-09-24,2022-09-16,13_13pro,lightning,Used Phone,,30
+iPhone 13 Pro 1TB,13.5,1024.0,1499,2021-09-24,2022-09-16,13_13pro,lightning,Used Phone,,31
+iPhone 13 Pro Max 128GB,13.7,128.0,1099,2021-09-24,2022-09-16,13_pro_max,lightning,Used Phone,,32
+iPhone 13 Pro Max 256GB,13.7,256.0,1199,2021-09-24,2022-09-16,13_pro_max,lightning,Used Phone,,33
+iPhone 13 Pro Max 512GB,13.7,512.0,1399,2021-09-24,2022-09-16,13_pro_max,lightning,Used Phone,,34
+iPhone 13 Pro Max 1TB,13.7,1024.0,1499,2021-09-24,2022-09-16,13_pro_max,lightning,Used Phone,,35
+iPhone 14 128GB,14.0,128.0,799,2022-09-16,2023-09-22,14,lightning,Used Phone,,36
+iPhone 14 256GB,14.0,256.0,899,2022-09-16,2023-09-22,14,lightning,Used Phone,,37
+iPhone 14 512GB,14.0,512.0,1099,2022-09-16,2023-09-22,14,lightning,Used Phone,,38
+iPhone 14 Plus 128GB,14.2,128.0,899,2022-10-07,2023-09-22,14_plus,lightning,Used Phone,,39
+iPhone 14 Plus 256GB,14.2,256.0,999,2022-10-07,2023-09-22,14_plus,lightning,Used Phone,,40
+iPhone 14 Plus 512GB,14.2,512.0,1199,2022-10-07,2023-09-22,14_plus,lightning,Used Phone,,41
+iPhone 14 Pro 128GB,14.5,128.0,1099,2022-09-16,2023-09-22,14_pro,lightning,Used Phone,,42
+iPhone 14 Pro 256GB,14.5,256.0,1199,2022-09-16,2023-09-22,14_pro,lightning,Used Phone,,43
+iPhone 14 Pro 512GB,14.5,512.0,1399,2022-09-16,2023-09-22,14_pro,lightning,Used Phone,,44
+iPhone 14 Pro 1TB,14.5,1024.0,1599,2022-09-16,2023-09-22,14_pro,lightning,Used Phone,,45
+iPhone 14 Pro Max 128GB,14.7,128.0,1199,2022-09-16,2023-09-22,14_pro_max,lightning,Used Phone,,46
+iPhone 14 Pro Max 256GB,14.7,256.0,1299,2022-09-16,2023-09-22,14_pro_max,lightning,Used Phone,,47
+iPhone 14 Pro Max 512GB,14.7,512.0,1499,2022-09-16,2023-09-22,14_pro_max,lightning,Used Phone,,48
+iPhone 14 Pro Max 1TB,14.7,1024.0,1699,2022-09-16,2023-09-22,14_pro_max,lightning,Used Phone,,49
+iPhone 15 256GB,15.0,256.0,899,2023-09-22,2024-09-20,15,usb-c,Used Phone,,50
+iPhone 15 512GB,15.0,512.0,1099,2023-09-22,2024-09-20,15,usb-c,Used Phone,,51
+iPhone 15 Plus 256GB,15.2,256.0,999,2023-09-22,2024-09-20,15_plus,usb-c,Used Phone,,52
+iPhone 15 Pro 256GB,15.5,256.0,1199,2023-09-22,2024-09-20,15_pro,usb-c,Used Phone,,53
+iPhone 15 Pro 512GB,15.5,512.0,1399,2023-09-22,2024-09-20,15_pro,usb-c,Used Phone,,54
+iPhone 15 Pro 1TB,15.5,1024.0,1599,2023-09-22,2024-09-20,15_pro,usb-c,Used Phone,,55
+iPhone 15 Pro Max 256GB,15.7,256.0,1399,2023-09-22,2024-09-20,15_pro_max,usb-c,Used Phone,,56
+iPhone 15 Pro Max 512GB,15.7,512.0,1599,2023-09-22,2024-09-20,15_pro_max,usb-c,Used Phone,,57
+iPhone 15 Pro Max 1TB,15.7,1024.0,1799,2023-09-22,2024-09-20,15_pro_max,usb-c,Used Phone,,58
+iPhone 16 128GB,16.0,128.0,829,2024-09-20,,16,usb-c,Used Phone,,59
+iPhone 16 256GB,16.0,256.0,899,2024-09-20,,16,usb-c,Used Phone,,60
+iPhone 16 512GB,16.0,512.0,999,2024-09-20,,16,usb-c,Used Phone,,61
+iPhone 16 Plus 128GB,16.2,128.0,929,2024-09-20,,16_plus,usb-c,Used Phone,,62
+iPhone 16 Plus 256GB,16.2,256.0,999,2024-09-20,,16_plus,usb-c,Used Phone,,63
+iPhone 16 Plus 512GB,16.2,512.0,1099,2024-09-20,,16_plus,usb-c,Used Phone,,64
+iPhone 16 Pro 128GB,16.5,128.0,999,2024-09-20,,16_pro,usb-c,Used Phone,,65
+iPhone 16 Pro 256GB,16.5,256.0,1099,2024-09-20,,16_pro,usb-c,Used Phone,,66
+iPhone 16 Pro 512GB,16.5,512.0,1299,2024-09-20,,16_pro,usb-c,Used Phone,,67
+iPhone 16 Pro 1TB,16.5,1024.0,1499,2024-09-20,,16_pro,usb-c,Used Phone,,68
+iPhone 16 Pro Max 256GB,16.7,256.0,1199,2024-09-20,,16_pro_max,usb-c,Used Phone,,69
+iPhone 16 Pro Max 512GB,16.7,512.0,1399,2024-09-20,,16_pro_max,usb-c,Used Phone,,70
+iPhone 16 Pro Max 1TB,16.7,1024.0,1599,2024-09-20,,16_pro_max,usb-c,Used Phone,,71
+iPhone 11 Silicone Case,,,49,,,,,Accessory,{'form_factor': '11'},72
+iPhone 11 Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '11'},73
+iPhone 11 Pro Silicone Case,,,49,,,,,Accessory,{'form_factor': '11_pro'},74
+iPhone 11 Pro Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '11_pro'},75
+iPhone 11 Pro Max Silicone Case,,,49,,,,,Accessory,{'form_factor': '11_pro_max'},76
+iPhone 11 Pro Max Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '11_pro_max'},77
+iPhone 12 Mini Silicone Case,,,49,,,,,Accessory,{'form_factor': '12_mini'},78
+iPhone 12 Mini Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '12_mini'},79
+iPhone 12 Pro Silicone Case,,,49,,,,,Accessory,{'form_factor': '12_12pro'},80
+iPhone 12 Pro Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '12_12pro'},81
+iPhone 12 Pro Max Silicone Case,,,49,,,,,Accessory,{'form_factor': '12_pro_max'},82
+iPhone 12 Pro Max Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '12_pro_max'},83
+iPhone 13 Mini Silicone Case,,,49,,,,,Accessory,{'form_factor': '13_mini'},84
+iPhone 13 Mini Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '13_mini'},85
+iPhone 13 Pro Silicone Case,,,49,,,,,Accessory,{'form_factor': '13_13pro'},86
+iPhone 13 Pro Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '13_13pro'},87
+iPhone 13 Pro Max Silicone Case,,,49,,,,,Accessory,{'form_factor': '13_pro_max'},88
+iPhone 13 Pro Max Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '13_pro_max'},89
+iPhone 14 Silicone Case,,,49,,,,,Accessory,{'form_factor': '14'},90
+iPhone 14 Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '14'},91
+iPhone 14 Plus Silicone Case,,,49,,,,,Accessory,{'form_factor': '14_plus'},92
+iPhone 14 Plus Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '14_plus'},93
+iPhone 14 Pro Silicone Case,,,49,,,,,Accessory,{'form_factor': '14_pro'},94
+iPhone 14 Pro Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '14_pro'},95
+iPhone 14 Pro Max Silicone Case,,,49,,,,,Accessory,{'form_factor': '14_pro_max'},96
+iPhone 14 Pro Max Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '14_pro_max'},97
+iPhone 15 Silicone Case,,,49,,,,,Accessory,{'form_factor': '15'},98
+iPhone 15 Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '15'},99
+iPhone 15 Plus Silicone Case,,,49,,,,,Accessory,{'form_factor': '15_plus'},100
+iPhone 15 Plus Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '15_plus'},101
+iPhone 15 Pro Silicone Case,,,49,,,,,Accessory,{'form_factor': '15_pro'},102
+iPhone 15 Pro Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '15_pro'},103
+iPhone 15 Pro Max Silicone Case,,,49,,,,,Accessory,{'form_factor': '15_pro_max'},104
+iPhone 15 Pro Max Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '15_pro_max'},105
+iPhone 16 Silicone Case,,,49,,,,,Accessory,{'form_factor': '16'},106
+iPhone 16 Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '16'},107
+iPhone 16 Plus Silicone Case,,,49,,,,,Accessory,{'form_factor': '16_plus'},108
+iPhone 16 Plus Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '16_plus'},109
+iPhone 16 Pro Silicone Case,,,49,,,,,Accessory,{'form_factor': '16_pro'},110
+iPhone 16 Pro Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '16_pro'},111
+iPhone 16 Pro Max Silicone Case,,,49,,,,,Accessory,{'form_factor': '16_pro_max'},112
+iPhone 16 Pro Max Tempered Glass Screen Protector,,,39,,,,,Accessory,{'form_factor': '16_pro_max'},113
+20W USB-C Power Adapter,,,19,,,,,Accessory,{'type': 'universal'},114
+MagSafe Charger,,,39,,,,,Accessory,{'min_tier': 12.0},115
+Lightning Cable (1m),,,19,,,,,Accessory,{'connector': 'lightning'},116
+USB-C Cable (1m),,,19,,,,,Accessory,{'connector': 'usb-c'},117
+AirPods Pro (2nd Gen),,,249,,,,,Accessory,{'type': 'universal'},118
