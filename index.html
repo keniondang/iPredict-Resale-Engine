@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Used Phone Resale Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .tab-button.active {
+            border-bottom-color: #4f46e5;
+            color: #4f46e5;
+            font-weight: 600;
+        }
+        .loader {
+            border-top-color: #4f46e5;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .inventory-table-row {
+            cursor: pointer;
+        }
+        .inventory-table-row:hover {
+            background-color: #f9fafb;
+        }
+        .inventory-table-row.selected {
+            background-color: #eef2ff;
+            --tw-ring-color: #4f46e5;
+            --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+            --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+            box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Used Phone Resale Dashboard</h1>
+                    <p class="text-gray-600 mt-2">AI-powered tools for optimizing your used phone business.</p>
+                </div>
+                <div id="datetime-container" class="text-right">
+                    <p class="text-lg font-semibold text-gray-800" id="current-time"></p>
+                    <p class="text-sm text-gray-500" id="current-date"></p>
+                </div>
+            </div>
+        </header>
+
+        <div class="mb-6 border-b border-gray-200">
+            <nav class="-mb-px flex space-x-6" id="tabs">
+                <button data-tab="appraisal" class="tab-button active py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
+                    Buy Price Appraisal
+                </button>
+                <button data-tab="inventory" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
+                    Inventory Pricing
+                </button>
+                <!-- 
+                <button data-tab="forecast" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
+                    Demand Forecast
+                </button>
+                -->
+                 <button data-tab="recommendations" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
+                    Accessory Cross-Sell
+                </button>
+                <button data-tab="discontinuation" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
+                    Discontinuation Alerts
+                </button>
+                <button data-tab="history" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
+                    Transaction History
+                </button>
+            </nav>
+        </div>
+
+        <main id="tab-content">
+            <div id="appraisal-content" class="tab-pane active">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm">
+                        <h2 class="text-xl font-semibold mb-4">Appraise a Phone</h2>
+                        <form id="appraisal-form" class="space-y-4">
+                            <div>
+                                <label for="appraisal-model" class="block text-sm font-medium text-gray-700">Phone Model</label>
+                                <select id="appraisal-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <option>Loading models...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="appraisal-grade" class="block text-sm font-medium text-gray-700">Condition Grade</label>
+                                <select id="appraisal-grade" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <option>A</option>
+                                    <option>B</option>
+                                    <option>C</option>
+                                    <option>D</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="desired-profit" class="block text-sm font-medium text-gray-700">Desired Profit ($)</label>
+                                <input type="number" id="desired-profit" value="25" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            </div>
+                            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Appraise
+                            </button>
+                        </form>
+                    </div>
+                    <div id="appraisal-results-container" class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm hidden">
+                        <h2 class="text-xl font-semibold mb-4">Appraisal Results</h2>
+                         <div id="appraisal-loader" class="flex justify-center items-center h-48 hidden">
+                            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                        </div>
+                        <div id="appraisal-results" class="space-y-4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="inventory-content" class="tab-pane hidden">
+                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h2 class="text-xl font-semibold mb-4">In-Stock Inventory by Store</h2>
+                        <p class="text-sm text-gray-500 mb-4">Click a unit to get a dynamic price recommendation.</p>
+                        <div id="inventory-accordion-loader" class="flex justify-center items-center h-64">
+                            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                        </div>
+                        <div id="inventory-accordion-container" class="space-y-2">
+                            </div>
+                    </div>
+                    <div id="inventory-results-container" class="bg-white p-6 rounded-xl shadow-sm">
+                        <h2 class="text-xl font-semibold mb-4">Pricing Recommendation</h2>
+                         <div id="inventory-loader" class="flex justify-center items-center h-48 hidden">
+                            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                        </div>
+                        <div id="inventory-results-placeholder" class="text-center text-gray-500 pt-16">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">No Item Selected</h3>
+                            <p class="mt-1 text-sm text-gray-500">Select an item from the inventory list to see its pricing details.</p>
+                        </div>
+                        <div id="inventory-results" class="space-y-4 hidden"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- This is a single-line comment 
+            <div id="forecast-content" class="tab-pane hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm">
+                        <h2 class="text-xl font-semibold mb-4">Demand Forecast</h2>
+                        <form id="forecast-form" class="space-y-4">
+                             <div>
+                                <label for="forecast-model" class="block text-sm font-medium text-gray-700">Phone Model</label>
+                                <select id="forecast-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <option>Loading models...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="forecast-days" class="block text-sm font-medium text-gray-700">Forecast Period (days)</label>
+                                <input type="number" id="forecast-days" value="90" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            </div>
+                            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Forecast Demand
+                            </button>
+                        </form>
+                    </div>
+                    <div class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm">
+                        <h2 class="text-xl font-semibold mb-4">Forecast Chart</h2>
+                        <div id="forecast-loader" class="flex justify-center items-center h-96 hidden">
+                            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                        </div>
+                        <canvas id="forecast-chart" class="hidden"></canvas>
+                        <div id="forecast-summary" class="text-center mt-4 hidden"></div>
+                        <div id="forecast-error" class="text-red-500"></div>
+                    </div>
+                </div>
+            </div>
+            -->
+
+            <div id="recommendations-content" class="tab-pane hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm">
+                        <h2 class="text-xl font-semibold mb-4">Accessory Recommendations</h2>
+                        <form id="recommendation-form" class="space-y-4">
+                            <div>
+                                <label for="recommendation-model" class="block text-sm font-medium text-gray-700">Phone Model</label>
+                                <select id="recommendation-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <option>Loading models...</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Get Recommendations
+                            </button>
+                        </form>
+                    </div>
+                    <div id="recommendation-results-container" class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm hidden">
+                        <h2 class="text-xl font-semibold mb-4">Top 3 Recommended Accessories</h2>
+                        <div id="recommendation-loader" class="flex justify-center items-center h-48 hidden">
+                            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                        </div>
+                        <div id="recommendation-results" class="space-y-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="discontinuation-content" class="tab-pane hidden">
+                <div class="bg-white p-6 rounded-xl shadow-sm">
+                    <h2 class="text-xl font-semibold mb-4">Accessory Discontinuation Alerts</h2>
+                    <p class="mb-4 text-gray-600">These accessories are compatible with phone models that have had very low sales in the past 180 days. Consider liquidating this stock.</p>
+                    <div id="discontinuation-loader" class="flex justify-center items-center h-48">
+                        <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                    </div>
+                    <div id="discontinuation-table-container" class="overflow-x-auto hidden">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product ID</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Accessory Name</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Compatible Phone Sales (180d)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="discontinuation-list" class="bg-white divide-y divide-gray-200">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="history-content" class="tab-pane hidden">
+                <div class="bg-white p-4 rounded-xl shadow-sm mb-6">
+                    <h3 class="text-lg font-medium mb-3">Filter Transactions</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                        <div>
+                            <label for="filter-store" class="block text-sm font-medium text-gray-700">Store</label>
+                            <select id="filter-store" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">All Stores</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="filter-model" class="block text-sm font-medium text-gray-700">Phone Model</label>
+                            <select id="filter-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">All Models</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="filter-start-date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                            <input type="date" id="filter-start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="filter-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
+                            <input type="date" id="filter-end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="filter-apply" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Filter</button>
+                            <button id="filter-reset" class="w-full bg-white text-gray-700 py-2 px-4 rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="history-loader" class="flex justify-center items-center h-64">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                </div>
+                <div id="history-container" class="space-y-6 hidden">
+                    <div id="history-summary-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+                    
+                    <div class="bg-white p-6 rounded-xl shadow-sm">
+                        <h2 class="text-xl font-semibold mb-4">Transaction Trends</h2>
+                        <div id="history-chart-container">
+                             <canvas id="history-chart"></canvas>
+                        </div>
+                        <div id="history-chart-placeholder" class="text-center text-gray-500 py-16 hidden">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">No Data to Display</h3>
+                            <p class="mt-1 text-sm text-gray-500">Apply filters to see transaction trends.</p>
+                        </div>
+                    </div>
+                     <div class="bg-white p-6 rounded-xl shadow-sm">
+                         <h2 class="text-xl font-semibold mb-4">Detailed Transaction Log</h2>
+                         <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Store</th>
+                                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
+                                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Profit</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-table-body" class="bg-white divide-y divide-gray-200">
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div id="history-error" class="text-red-500"></div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://127.0.0.1:5000/api';
+        let forecastChartInstance = null;
+        let historyChartInstance = null;
+
+        // --- Helper Functions ---
+        const showLoader = (loaderId) => document.getElementById(loaderId).classList.remove('hidden');
+        const hideLoader = (loaderId) => document.getElementById(loaderId).classList.add('hidden');
+        
+        async function apiFetch(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+                if (!response.ok) {
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.indexOf("application/json") !== -1) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                    } else {
+                        throw new Error(`Server returned an unreadable error: ${response.status} ${response.statusText}`);
+                    }
+                }
+                return await response.json();
+            } catch (error) {
+                console.error(`Fetch error for ${endpoint}:`, error);
+                throw error;
+            }
+        }
+
+        // --- Live Clock ---
+        function updateClock() {
+            const now = new Date();
+            const timeEl = document.getElementById('current-time');
+            const dateEl = document.getElementById('current-date');
+            
+            if(timeEl && dateEl) {
+                timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                dateEl.textContent = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            }
+        }
+
+        // --- Tab Switching Logic ---
+        document.getElementById('tabs').addEventListener('click', (e) => {
+            if (e.target.matches('button')) {
+                const tab = e.target.dataset.tab;
+                
+                document.querySelectorAll('.tab-button').forEach(button => button.classList.remove('active'));
+                e.target.classList.add('active');
+
+                document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+                document.getElementById(`${tab}-content`).classList.remove('hidden');
+
+                if (tab === 'inventory') {
+                    loadInventoryList();
+                } else if (tab === 'history') {
+                    loadTransactionHistory();
+                }
+            }
+        });
+
+        // --- Populate Phone Models ---
+        async function populatePhoneModels() {
+            try {
+                const models = await apiFetch('/products');
+                const appraisalSelect = document.getElementById('appraisal-model');
+                const forecastSelect = document.getElementById('forecast-model');
+                const recommendationSelect = document.getElementById('recommendation-model');
+                
+                appraisalSelect.innerHTML = '';
+                forecastSelect.innerHTML = '';
+                recommendationSelect.innerHTML = '';
+
+                models.forEach(model => {
+                    const option = `<option>${model}</option>`;
+                    appraisalSelect.innerHTML += option;
+                    forecastSelect.innerHTML += option;
+                    recommendationSelect.innerHTML += option;
+                });
+            } catch (error) {
+                 document.getElementById('appraisal-model').innerHTML = '<option>Error loading models</option>';
+                 document.getElementById('forecast-model').innerHTML = '<option>Error loading models</option>';
+                 document.getElementById('recommendation-model').innerHTML = '<option>Error loading models</option>';
+            }
+        }
+
+        // --- Appraisal Logic ---
+        document.getElementById('appraisal-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const model = document.getElementById('appraisal-model').value;
+            const grade = document.getElementById('appraisal-grade').value;
+            const desiredProfit = document.getElementById('desired-profit').value;
+            const resultsContainer = document.getElementById('appraisal-results-container');
+            const resultsDiv = document.getElementById('appraisal-results');
+            
+            showLoader('appraisal-loader');
+            resultsContainer.classList.remove('hidden');
+            resultsDiv.innerHTML = '';
+
+            try {
+                const data = await apiFetch('/appraise/buy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        model_name: model, 
+                        grade: grade,
+                        desired_profit: desiredProfit
+                    })
+                });
+                
+                const velocityColor = data.predicted_sales_velocity === 'Fast Mover' ? 'text-green-600' : 
+                                    data.predicted_sales_velocity === 'Medium Mover' ? 'text-yellow-600' : 'text-red-600';
+                
+                let marketAlertHtml = '';
+                if (data.market_alert) {
+                    marketAlertHtml = `
+                        <div class="p-4 border-l-4 border-yellow-400 bg-yellow-50">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M8.257 3.099c.636-1.026 2.287-1.026 2.923 0l5.613 9.043c.642 1.033-.173 2.358-1.462 2.358H4.105c-1.289 0-2.104-1.325-1.462-2.358l5.614-9.043zM10 12a1 1 0 110-2 1 1 0 010 2zm-1-4a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <p class="text-sm text-yellow-700">
+                                        Market Shift Alert: Your historical buy price for this model is higher than the current market can support for a profit. Proceed with caution.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                resultsDiv.innerHTML = `
+                    <div class="space-y-6">
+                        <div>
+                            <p class="text-sm text-gray-500">Model Appraised</p>
+                            <p class="text-lg font-semibold">${data.model_appraised} (Grade: ${data.grade})</p>
+                        </div>
+
+                        ${marketAlertHtml}
+
+                        <div class="p-4 border-2 border-green-500 rounded-lg bg-green-50">
+                             <p class="text-sm font-medium text-green-800 text-center">Primary Recommendation: Target Buy Price</p>
+                            <p class="text-center text-sm text-gray-600 mt-1">To make a <span class="font-bold">$${desiredProfit}</span> profit, you should offer:</p>
+                            <p class="text-4xl font-bold text-center my-2 text-green-600">$${data.profit_targeted_buy_price_range.low.toFixed(2)} - $${data.profit_targeted_buy_price_range.high.toFixed(2)}</p>
+                            <p class="text-xs text-center text-gray-500">(Median Target: $${data.profit_targeted_buy_price_range.median.toFixed(2)})</p>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+                            <div class="p-3 border rounded-lg">
+                                <p class="text-sm font-medium text-gray-700">Historically-Based Buy Price</p>
+                                <p class="text-sm text-gray-500 mb-1">(What you've paid in the past)</p>
+                                <p class="text-lg font-semibold text-indigo-600">$${data.historically_based_buy_price.low.toFixed(2)} - $${data.historically_based_buy_price.high.toFixed(2)}</p>
+                                <p class="text-sm text-gray-500">Median: $${data.historically_based_buy_price.median.toFixed(2)}</p>
+                            </div>
+                            <div class="p-3 border rounded-lg">
+                                <p class="text-sm font-medium text-gray-700">Predicted Sales Velocity</p>
+                                <p class="text-lg font-semibold ${velocityColor}">${data.predicted_sales_velocity}</p>
+                                <p class="text-xs text-gray-500 mt-1">${data.velocity_reason || ''}</p>
+                            </div>
+                            </div>
+                    </div>
+                `;
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+            } finally {
+                hideLoader('appraisal-loader');
+            }
+        });
+
+        // --- Inventory Pricing Logic ---
+        async function getInventoryPrice(unitId) {
+            const resultsDiv = document.getElementById('inventory-results');
+            const placeholder = document.getElementById('inventory-results-placeholder');
+            
+            showLoader('inventory-loader');
+            resultsDiv.classList.add('hidden');
+            placeholder.classList.add('hidden');
+            resultsDiv.innerHTML = '';
+
+            try {
+                const data = await apiFetch('/inventory/price', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ unit_id: parseInt(unitId) })
+                });
+                
+                resultsDiv.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-500">Unit ID / Model</p>
+                            <p class="text-lg font-semibold">${data.unit_id} / ${data.model_name}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Status / Days in Inventory</p>
+                            <p class="text-lg font-semibold">${data.status} / ${data.days_in_inventory} days</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Acquisition Date</p>
+                            <p class="text-lg font-semibold">${data.acquisition_date}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Acquisition Price</p>
+                            <p class="text-lg font-semibold">$${data.acquisition_price ? data.acquisition_price.toFixed(2) : 'N/A'}</p>
+                        </div>
+                    </div>
+                    <div class="pt-4 border-t mt-4">
+                        <p class="text-sm text-gray-500">Recommended Selling Price Range</p>
+                        <p class="text-lg font-semibold text-indigo-600">$${data.predicted_selling_price_range.low_liquidate_price.toFixed(2)} - $${data.predicted_selling_price_range.high_start_price.toFixed(2)}</p>
+                        <p class="text-sm text-gray-500">(Fair Market: $${data.predicted_selling_price_range.median_fair_market_price.toFixed(2)})</p>
+                    </div>
+                `;
+                resultsDiv.classList.remove('hidden');
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+                resultsDiv.classList.remove('hidden');
+            } finally {
+                hideLoader('inventory-loader');
+            }
+        }
+
+        async function loadInventoryList() {
+            const accordionContainer = document.getElementById('inventory-accordion-container');
+            const loader = document.getElementById('inventory-accordion-loader');
+            
+            showLoader('inventory-accordion-loader');
+            accordionContainer.innerHTML = '';
+
+            try {
+                const data = await apiFetch('/inventory/all');
+                
+                if (Object.keys(data).length === 0) {
+                    accordionContainer.innerHTML = '<p class="text-gray-500">No in-stock inventory found.</p>';
+                    return;
+                }
+
+                const sortedStoreNames = Object.keys(data).sort();
+                let accordionHtml = '';
+                for (const storeName of sortedStoreNames) {
+                    const items = data[storeName];
+                    items.sort((a, b) => a.model_name.localeCompare(b.model_name));
+                    
+                    let tableRows = '';
+                    items.forEach(item => {
+                        tableRows += `
+                            <tr class="inventory-table-row" data-unit-id="${item.unit_id}">
+                                <td class="px-4 py-3 text-sm text-gray-600">${item.model_name}</td>
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900 text-center">${item.unit_id}</td>
+                                <td class="px-4 py-3 text-sm text-gray-600 text-center">${item.grade}</td>
+                            </tr>
+                        `;
+                    });
+
+                    accordionHtml += `
+                        <div>
+                            <h3>
+                                <button type="button" class="flex items-center justify-between w-full p-4 font-semibold text-left text-gray-800 bg-gray-50 border border-gray-200 hover:bg-gray-100 focus:outline-none" data-accordion-button>
+                                    <span>${storeName} (${items.length} units)</span>
+                                    <svg class="w-3 h-3 rotate-180 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6">
+                                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5 5 1 1 5"/>
+                                    </svg>
+                                </button>
+                            </h3>
+                            <div class="hidden border border-t-0 border-gray-200">
+                                <div class="h-64 overflow-y-auto">
+                                    <table class="min-w-full divide-y divide-gray-200">
+                                        <thead class="bg-gray-100 sticky top-0">
+                                            <tr>
+                                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
+                                                <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Unit ID</th>
+                                                <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Grade</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="bg-white divide-y divide-gray-200">
+                                            ${tableRows}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                accordionContainer.innerHTML = accordionHtml;
+
+            } catch (error) {
+                accordionContainer.innerHTML = `<p class="text-red-500">Error loading inventory: ${error.message}</p>`;
+            } finally {
+                hideLoader('inventory-accordion-loader');
+            }
+        }
+
+        // --- Forecast Logic ---
+        document.getElementById('forecast-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const model = document.getElementById('forecast-model').value;
+            const days = document.getElementById('forecast-days').value;
+            const chartCanvas = document.getElementById('forecast-chart');
+            const summaryDiv = document.getElementById('forecast-summary');
+            const errorDiv = document.getElementById('forecast-error');
+            
+            showLoader('forecast-loader');
+            chartCanvas.classList.add('hidden');
+            summaryDiv.classList.add('hidden');
+            errorDiv.textContent = '';
+
+            try {
+                const data = await apiFetch('/demand_forecast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ product_name: model, periods: parseInt(days) })
+                });
+
+                const dailyData = data.daily_data;
+                const labels = dailyData.map(d => d.date);
+                const predictions = dailyData.map(d => d.prediction);
+                const lowerBounds = dailyData.map(d => d.lower_bound);
+                const upperBounds = dailyData.map(d => d.upper_bound);
+
+                if (forecastChartInstance) {
+                    forecastChartInstance.destroy();
+                }
+
+                chartCanvas.classList.remove('hidden');
+                const ctx = chartCanvas.getContext('2d');
+                forecastChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: 'Predicted Sales',
+                                data: predictions,
+                                borderColor: '#4f46e5',
+                                backgroundColor: '#4f46e5',
+                                tension: 0.1,
+                                fill: false
+                            },
+                            {
+                                label: 'Confidence Interval',
+                                data: upperBounds,
+                                fill: '-1',
+                                backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                                borderColor: 'transparent',
+                                pointRadius: 0,
+                                borderWidth: 0
+                            },
+                             {
+                                label: 'Lower Bound',
+                                data: lowerBounds,
+                                fill: false,
+                                borderColor: 'transparent',
+                                pointRadius: 0,
+                                borderWidth: 0
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { beginAtZero: true, title: { display: true, text: 'Daily Units Sold' } },
+                            x: { title: { display: true, text: 'Date' } }
+                        },
+                        plugins: { tooltip: { mode: 'index', intersect: false }, legend: { display: false } }
+                    }
+                });
+                
+                // Display the total forecast summary
+                summaryDiv.innerHTML = `<p class="text-gray-600">Estimated Total Demand (${days} days): <span class="font-bold text-xl text-indigo-600">${data.total_forecast} units</span></p>`;
+                summaryDiv.classList.remove('hidden');
+
+            } catch (error) {
+                errorDiv.textContent = `Error: ${error.message}`;
+            } finally {
+                hideLoader('forecast-loader');
+            }
+        });
+
+        // --- Recommendation Logic ---
+        document.getElementById('recommendation-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const modelName = document.getElementById('recommendation-model').value;
+            if (!modelName) {
+                alert('Please select a Phone Model.');
+                return;
+            }
+            const resultsContainer = document.getElementById('recommendation-results-container');
+            const resultsDiv = document.getElementById('recommendation-results');
+            
+            showLoader('recommendation-loader');
+            resultsContainer.classList.remove('hidden');
+            resultsDiv.innerHTML = '';
+
+            try {
+                const data = await apiFetch('/recommend/accessories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone_model_name: modelName })
+                });
+
+                if (data.length === 0) {
+                     resultsDiv.innerHTML = `<p class="text-gray-500">No recommendations available for this product.</p>`;
+                } else {
+                    let content = '';
+                    data.forEach(item => {
+                        content += `
+                            <div class="p-3 border rounded-lg">
+                                <p class="font-semibold">${item.model_name}</p>
+                                <p class="text-sm text-gray-500">Product ID: ${item.product_id} | MSRP: $${item.original_msrp ? item.original_msrp.toFixed(2) : 'N/A'}</p>
+                            </div>
+                        `;
+                    });
+                    resultsDiv.innerHTML = content;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+            } finally {
+                hideLoader('recommendation-loader');
+            }
+        });
+
+        // --- Discontinuation Logic ---
+        async function loadDiscontinuationList() {
+            const listContainer = document.getElementById('discontinuation-list');
+            const loader = document.getElementById('discontinuation-loader');
+            const tableContainer = document.getElementById('discontinuation-table-container');
+
+            showLoader('discontinuation-loader');
+            tableContainer.classList.add('hidden');
+
+            try {
+                const data = await apiFetch('/inventory/discontinuation_alerts');
+                listContainer.innerHTML = '';
+                if (data.length === 0) {
+                    listContainer.innerHTML = '<tr><td colspan="3" class="text-center py-4">No discontinuation alerts at this time.</td></tr>';
+                } else {
+                    data.forEach(item => {
+                        listContainer.innerHTML += `
+                            <tr>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.product_id}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.model_name}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.compatible_phone_sales_past_180_days}</td>
+                            </tr>
+                        `;
+                    });
+                }
+                tableContainer.classList.remove('hidden');
+            } catch (error) {
+                listContainer.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-red-500">Error loading data: ${error.message}</td></tr>`;
+            } finally {
+                hideLoader('discontinuation-loader');
+            }
+        }
+
+        // --- Transaction History Logic ---
+        async function populateHistoryFilters() {
+            try {
+                const data = await apiFetch('/filter_options');
+                const storeSelect = document.getElementById('filter-store');
+                const modelSelect = document.getElementById('filter-model');
+
+                data.stores.forEach(store => {
+                    storeSelect.innerHTML += `<option value="${store}">${store}</option>`;
+                });
+
+                data.models.forEach(model => {
+                    modelSelect.innerHTML += `<option value="${model}">${model}</option>`;
+                });
+            } catch (error) {
+                console.error("Failed to load history filters:", error);
+            }
+        }
+
+        async function loadTransactionHistory() {
+            const loader = document.getElementById('history-loader');
+            const container = document.getElementById('history-container');
+            const errorDiv = document.getElementById('history-error');
+            const summaryContainer = document.getElementById('history-summary-cards');
+            const tableBody = document.getElementById('history-table-body');
+            const chartCanvas = document.getElementById('history-chart');
+            const chartPlaceholder = document.getElementById('history-chart-placeholder');
+            const chartContainer = document.getElementById('history-chart-container');
+
+            const store = document.getElementById('filter-store').value;
+            const model = document.getElementById('filter-model').value;
+            const startDate = document.getElementById('filter-start-date').value;
+            const endDate = document.getElementById('filter-end-date').value;
+
+            const params = new URLSearchParams();
+            if (store) params.append('store', store);
+            if (model) params.append('model', model);
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+            const queryString = params.toString();
+
+            showLoader('history-loader');
+            container.classList.add('hidden');
+            errorDiv.textContent = '';
+
+            try {
+                const data = await apiFetch(`/transactions/history?${queryString}`);
+                
+                // Populate Summary Cards
+                const summary = data.summary;
+                summaryContainer.innerHTML = `
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <p class="text-sm text-gray-500">Total Revenue</p>
+                        <p class="text-2xl font-semibold text-green-600">$${summary.total_revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <p class="text-sm text-gray-500">Total Cost of Goods Sold</p>
+                        <p class="text-2xl font-semibold text-red-600">$${summary.total_cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <p class="text-sm text-gray-500">Total Profit</p>
+                        <p class="text-2xl font-semibold ${summary.total_profit >= 0 ? 'text-blue-600' : 'text-red-600'}">$${summary.total_profit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-lg shadow-sm border">
+                        <p class="text-sm text-gray-500">Units Sold</p>
+                        <p class="text-2xl font-semibold text-gray-700">${summary.units_sold}</p>
+                    </div>
+                `;
+
+                // Populate Table
+                tableBody.innerHTML = '';
+                if (data.history.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for the selected filters.</td></tr>';
+                } else {
+                    data.history.forEach(item => {
+                        const profitColor = item.profit >= 0 ? 'text-green-600' : 'text-red-600';
+                        tableBody.innerHTML += `
+                            <tr>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.transaction_date}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${item.model_name} (Grade ${item.grade || 'N/A'})</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.store_name}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${item.acquisition_price ? item.acquisition_price.toFixed(2) : '0.00'}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${item.final_sale_price ? item.final_sale_price.toFixed(2) : '0.00'}</td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold text-right ${profitColor}">$${item.profit ? item.profit.toFixed(2) : '0.00'}</td>
+                            </tr>
+                        `;
+                    });
+                }
+                
+                // Handle Chart
+                if (historyChartInstance) {
+                    historyChartInstance.destroy();
+                }
+
+                if (data.history.length > 0) {
+                    chartContainer.classList.remove('hidden');
+                    chartPlaceholder.classList.add('hidden');
+
+                    const dailyData = {};
+                    data.history.forEach(item => {
+                        const date = item.transaction_date;
+                        if (!dailyData[date]) {
+                            dailyData[date] = { revenue: 0, profit: 0, units: 0 };
+                        }
+                        dailyData[date].revenue += item.final_sale_price || 0;
+                        dailyData[date].profit += item.profit || 0;
+                        dailyData[date].units += 1;
+                    });
+
+                    const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(a) - new Date(b));
+                    const labels = sortedDates;
+                    const revenueData = sortedDates.map(date => dailyData[date].revenue);
+                    const profitData = sortedDates.map(date => dailyData[date].profit);
+                    const unitsData = sortedDates.map(date => dailyData[date].units);
+
+                    const ctx = chartCanvas.getContext('2d');
+                    historyChartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Revenue',
+                                data: revenueData,
+                                backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                                yAxisID: 'y-amount',
+                            }, {
+                                label: 'Profit',
+                                data: profitData,
+                                backgroundColor: 'rgba(5, 150, 105, 0.6)',
+                                yAxisID: 'y-amount',
+                            }, {
+                                label: 'Units Sold',
+                                data: unitsData,
+                                type: 'line',
+                                borderColor: 'rgba(219, 39, 119, 0.8)',
+                                backgroundColor: 'rgba(219, 39, 119, 0.1)',
+                                yAxisID: 'y-units',
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            interaction: { mode: 'index', intersect: false },
+                            scales: {
+                                x: { title: { display: true, text: 'Date' } },
+                                'y-amount': {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'left',
+                                    title: { display: true, text: 'Amount ($)' }
+                                },
+                                'y-units': {
+                                    type: 'linear',
+                                    display: true,
+                                    position: 'right',
+                                    title: { display: true, text: 'Units Sold' },
+                                    grid: { drawOnChartArea: false },
+                                    ticks: { precision: 0 }
+                                }
+                            },
+                            plugins: {
+                                legend: { position: 'top' },
+                                tooltip: { mode: 'index', intersect: false }
+                            }
+                        }
+                    });
+                } else {
+                    chartContainer.classList.add('hidden');
+                    chartPlaceholder.classList.remove('hidden');
+                }
+                
+                container.classList.remove('hidden');
+
+            } catch (error) {
+                errorDiv.textContent = `Error loading transaction history: ${error.message}`;
+            } finally {
+                hideLoader('history-loader');
+            }
+        }
+
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            populatePhoneModels();
+            loadDiscontinuationList();
+            populateHistoryFilters();
+            updateClock();
+            setInterval(updateClock, 1000);
+            
+            const accordionContainer = document.getElementById('inventory-accordion-container');
+            accordionContainer.addEventListener('click', (e) => {
+                const button = e.target.closest('[data-accordion-button]');
+                if (button) {
+                    const body = button.parentElement.nextElementSibling;
+                    const icon = button.querySelector('svg');
+                    body.classList.toggle('hidden');
+                    icon.classList.toggle('rotate-180');
+                    return;
+                }
+
+                const row = e.target.closest('.inventory-table-row');
+                if (row) {
+                    const unitId = row.dataset.unitId;
+                    getInventoryPrice(unitId);
+                    accordionContainer.querySelectorAll('.inventory-table-row').forEach(r => r.classList.remove('selected'));
+                    row.classList.add('selected');
+                }
+            });
+
+            document.getElementById('filter-apply').addEventListener('click', loadTransactionHistory);
+            document.getElementById('filter-reset').addEventListener('click', () => {
+                document.getElementById('filter-store').value = '';
+                document.getElementById('filter-model').value = '';
+                document.getElementById('filter-start-date').value = '';
+                document.getElementById('filter-end-date').value = '';
+                loadTransactionHistory();
+            });
+        });
+
+    </script>
+</body>
+</html>

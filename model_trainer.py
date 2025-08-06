@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 A unified script for training all models related to the used phone business,
-including purchase price prediction, sales velocity, dynamic selling price,
-demand forecasting, discontinuation lists, and recommendation data.
+reading all source data from a SQL Server database.
 """
 
 # 1. IMPORTS
 # ==============================================================================
 import pandas as pd
 import numpy as np
+from sqlalchemy import create_engine
+import urllib
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
@@ -23,7 +24,48 @@ import os
 import argparse
 from datetime import datetime, timedelta
 
-# 2. HELPER & UTILITY FUNCTIONS
+# 2. DATABASE CONNECTION SETUP
+# ==============================================================================
+
+# --- CONFIGURATION ---
+# !!! IMPORTANT: UPDATE THESE VALUES TO MATCH YOUR SQL SERVER SETUP !!!
+SERVER_NAME = "localhost\\SQLEXPRESS"
+DATABASE_NAME = "UsedPhoneResale"
+# ---------------------
+
+def get_db_engine():
+    """Creates and returns a SQLAlchemy engine for SQL Server."""
+    try:
+        params = urllib.parse.quote_plus(
+            f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+            f"SERVER={SERVER_NAME};"
+            f"DATABASE={DATABASE_NAME};"
+            f"Trusted_Connection=yes;"
+        )
+        connection_string = f"mssql+pyodbc:///?odbc_connect={params}"
+        engine = create_engine(connection_string)
+        # Test connection
+        connection = engine.connect()
+        connection.close()
+        print(f"Successfully created DB engine for SQL Server: {SERVER_NAME}, DB: {DATABASE_NAME}")
+        return engine
+    except Exception as e:
+        print(f"FATAL: Could not create database engine. Error: {e}")
+        return None
+
+def load_data_from_db(engine, table_name):
+    """Loads a table from the database into a pandas DataFrame."""
+    try:
+        print(f"  - Loading table: '{table_name}'...")
+        query = f"SELECT * FROM {table_name}"
+        df = pd.read_sql(query, engine)
+        print(f"    ...Done. Loaded {len(df)} rows.")
+        return df
+    except Exception as e:
+        print(f"Error loading table {table_name}: {e}")
+        return pd.DataFrame()
+
+# 3. HELPER & UTILITY FUNCTIONS (Unchanged)
 # ==============================================================================
 
 def get_predecessor(base_model: str):
@@ -60,7 +102,7 @@ def _get_market_demand(data_to_score: pd.DataFrame, sales_history: pd.DataFrame,
     return data_to_score.apply(calculate_demand, axis=1)
 
 
-# 3. MODEL TRAINING & DATA BUILDING FUNCTIONS
+# 4. MODEL TRAINING & DATA BUILDING FUNCTIONS (Updated to use DB)
 # ==============================================================================
 
 def train_price_model(inventory: pd.DataFrame, products: pd.DataFrame, models_dir: str):
@@ -107,7 +149,20 @@ def train_velocity_model(inventory: pd.DataFrame, products: pd.DataFrame, transa
     sold_units = pd.merge(inventory[inventory['status'] == 'Sold'], transactions[['unit_id', 'transaction_date']], on='unit_id')
     data = pd.merge(sold_units, products, on='product_id')
     data['days_to_sell'] = (data['transaction_date'] - data['acquisition_date']).dt.days
-    data['sales_velocity_category'] = pd.cut(data['days_to_sell'], bins=[-1, 30, 90, np.inf], labels=['Fast Mover', 'Medium Mover', 'Dead Stock Risk'])
+
+    # --- MODIFICATION START ---
+    # Made the sales velocity thresholds less aggressive.
+    # Fast Mover: < 45 days (previously < 30)
+    # Medium Mover: 45-120 days (previously 30-90)
+    # Dead Stock Risk: > 120 days (previously > 90)
+    print("  - Applying new sales velocity thresholds (Fast: <45d, Medium: 45-120d, Risk: >120d)...")
+    data['sales_velocity_category'] = pd.cut(
+        data['days_to_sell'], 
+        bins=[-1, 45, 120, np.inf], 
+        labels=['Fast Mover', 'Medium Mover', 'Dead Stock Risk']
+    )
+    # --- MODIFICATION END ---
+    
     data.dropna(subset=['sales_velocity_category'], inplace=True)
     data['days_since_model_release'] = (data['acquisition_date'] - data['release_date']).dt.days
     sales_history = pd.merge(transactions, products, on='product_id')[['base_model', 'transaction_date']]
@@ -142,13 +197,23 @@ def train_dynamic_selling_price_model(inventory: pd.DataFrame, products: pd.Data
     data = pd.merge(sold_units, products, on='product_id')
     data.dropna(subset=['final_sale_price', 'acquisition_date', 'transaction_date'], inplace=True)
     print("Step 2: Engineering features from the perspective of the sale date...")
-    data['days_in_inventory'] = (data['transaction_date'] - data['acquisition_date']).dt.days
     data['days_since_model_release'] = (data['transaction_date'] - data['release_date']).dt.days
     data['days_since_successor_release'] = (data['transaction_date'] - data['successor_release_date']).dt.days
     data['days_since_successor_release'].fillna(-999, inplace=True)
     sales_history = pd.merge(transactions, products, on='product_id')[['base_model', 'transaction_date']]
     data['market_demand_7_days'] = _get_market_demand(data, sales_history, products, 'transaction_date', 7, 7)
-    feature_columns = ['original_msrp', 'storage_gb', 'grade', 'model_tier', 'base_model', 'acquisition_price', 'days_in_inventory', 'days_since_model_release', 'days_since_successor_release', 'market_demand_7_days']
+    
+    feature_columns = [
+        'original_msrp', 
+        'storage_gb', 
+        'grade', 
+        'model_tier', 
+        'base_model', 
+        'days_since_model_release', 
+        'days_since_successor_release', 
+        'market_demand_7_days'
+    ]
+    
     categorical_features = ['grade', 'model_tier', 'base_model']
     X = data[feature_columns]
     y = data['final_sale_price']
@@ -200,10 +265,10 @@ def train_forecast_model(category_value: str, products_df: pd.DataFrame, transac
     base_cap = max_sales * 1.5
     def calculate_cap(row_date):
         days_since_release = (row_date - release_date).days
-        decay_factor = 1 - (days_since_release / (365 * 4))
+        decay_factor = 1 - (days_since_release / (365 * 2))
         if pd.notna(successor_date) and row_date > successor_date:
             days_after_successor = (row_date - successor_date).days
-            successor_decay = 0.5 - (days_after_successor / (365 * 2))
+            successor_decay = 0.5 - (days_after_successor / (365 * 1))
             decay_factor = min(decay_factor, successor_decay)
         return max(1, base_cap * decay_factor)
     daily_sales['cap'] = daily_sales['ds'].apply(calculate_cap)
@@ -281,7 +346,7 @@ def build_recommendation_data(products_df: pd.DataFrame, transactions_df: pd.Dat
     print(f"\nRecommendation data built and saved successfully to '{output_path}'.")
 
 
-# 4. MAIN EXECUTION BLOCK
+# 5. MAIN EXECUTION BLOCK
 # ==============================================================================
 def main():
     """Main function to parse arguments and run selected training tasks."""
@@ -295,30 +360,36 @@ def main():
     parser.add_argument('--recommendation', action='store_true', help="Build the recommendation data artifact.")
     args = parser.parse_args()
 
-    DATA_DIR = 'data'
     MODELS_DIR = 'models'
     os.makedirs(MODELS_DIR, exist_ok=True)
-    print("--- Loading and Preparing All Data Sources ---")
     run_all = args.all or not any(vars(args).values())
 
+    db_engine = get_db_engine()
+    if db_engine is None:
+        return # Stop execution if DB connection fails
+
+    print("\n--- Loading and Preparing All Data Sources from Database ---")
     try:
-        inventory_df = pd.read_csv(os.path.join(DATA_DIR, 'inventory_units.csv'))
-        products_df = pd.read_csv(os.path.join(DATA_DIR, 'products.csv'))
-        transactions_df = pd.read_csv(os.path.join(DATA_DIR, 'transactions.csv'))
+        inventory_df = load_data_from_db(db_engine, 'inventory_units')
+        products_df = load_data_from_db(db_engine, 'products')
+        transactions_df = load_data_from_db(db_engine, 'transactions')
         if run_all or args.discontinuation or args.recommendation:
-            compat_df = pd.read_csv(os.path.join(DATA_DIR, 'accessory_compatibility.csv'))
+            compat_df = load_data_from_db(db_engine, 'accessory_compatibility')
         if run_all or args.discontinuation:
-            acc_inv_df = pd.read_csv(os.path.join(DATA_DIR, 'accessory_inventory.csv'))
-    except FileNotFoundError as e:
-        print(f"Error: {e}. Make sure all required CSV files are in the '{DATA_DIR}/' directory.")
+            acc_inv_df = load_data_from_db(db_engine, 'accessory_inventory')
+    except Exception as e:
+        print(f"Error loading data from database: {e}.")
         return
 
+    # Convert date columns to datetime objects
     for df in [inventory_df, products_df, transactions_df]:
         for col in ['acquisition_date', 'release_date', 'successor_release_date', 'transaction_date']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce')
+
+    # Engineer 'base_model' feature
     products_df['base_model'] = products_df['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
-    print("--- Data Loading Complete ---")
+    print("--- Data Loading and Preparation Complete ---")
 
     if run_all or args.price:
         train_price_model(inventory_df, products_df[products_df['product_type'] == 'Used Phone'], MODELS_DIR)
@@ -340,6 +411,8 @@ def main():
         build_recommendation_data(products_df, transactions_df, compat_df, MODELS_DIR)
         
     print("\n--- All selected tasks are complete. ---")
+    db_engine.dispose()
+    print("Database engine disposed.")
 
 if __name__ == '__main__':
     main()
