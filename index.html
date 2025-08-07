@@ -212,20 +212,25 @@
                              <div class="h-80 relative"><canvas id="history-chart"></canvas></div>
                         </div>
                         <div class="bg-white p-6 rounded-xl shadow-sm">
-                             <h3 class="text-lg font-semibold mb-4">Transactions</h3>
-                             <div class="overflow-auto h-96">
-                                <table class="min-w-full divide-y divide-gray-200">
-                                    <thead class="bg-gray-50 sticky top-0"><tr>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">TXN ID</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Model</th><th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Grade</th><th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Sale Price</th><th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Profit/Loss</th>
-                                    </tr></thead>
-                                    <tbody id="history-table-body" class="bg-white divide-y divide-gray-200"></tbody>
-                                </table>
+                                <h3 class="text-lg font-semibold mb-4">Transactions</h3>
+                                <div class="overflow-auto h-96">
+                                    <table class="min-w-full">
+                                        <thead class="bg-gray-50 sticky top-0"><tr>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-20">TXN ID</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase w-32">Date</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
+                                            <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase w-20">Grade</th>
+                                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-32">Sale Price</th>
+                                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase w-32">Profit/Loss</th>
+                                        </tr></thead>
+                                        <tbody id="history-table-body"></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
             <div id="recommendations-content" class="tab-pane hidden">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm">
@@ -247,7 +252,6 @@
                     </div>
                 </div>
             </div>
-
             <div id="discontinuation-content" class="tab-pane hidden">
                 <div class="bg-white p-6 rounded-xl shadow-sm">
                     <h2 class="text-xl font-semibold mb-4">Accessory Discontinuation Alerts</h2>
@@ -771,29 +775,93 @@
             document.getElementById('history-results-area').classList.add('hidden');
             const tableBody = document.getElementById('history-table-body');
             tableBody.innerHTML = '';
-            const params = new URLSearchParams({ model_name: document.getElementById('history-model').value, grade: document.getElementById('history-grade').value, store_id: document.getElementById('history-store').value, start_date: document.getElementById('history-start-date').value, end_date: document.getElementById('history-end-date').value });
-            for(let [key, val] of params.entries()) { if (!val) { params.delete(key); } }
+            
+            const params = new URLSearchParams({
+                model_name: document.getElementById('history-model').value,
+                grade: document.getElementById('history-grade').value,
+                store_id: document.getElementById('history-store').value,
+                start_date: document.getElementById('history-start-date').value,
+                end_date: document.getElementById('history-end-date').value,
+            });
+
+            for(let [key, val] of params.entries()) {
+                if (!val) { params.delete(key); }
+            }
+            
             try {
                 const data = await apiFetch(`/transactions/history?${params.toString()}`);
+                
                 const summary = data.summary;
                 document.getElementById('summary-revenue').textContent = summary.total_revenue ? `$${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '$0.00';
                 document.getElementById('summary-cost').textContent = summary.total_cost ? `$${summary.total_cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '$0.00';
                 document.getElementById('summary-profit').textContent = summary.total_profit ? `$${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '$0.00';
                 document.getElementById('summary-items').textContent = summary.total_items_sold || 0;
                 document.getElementById('summary-avg-days').textContent = summary.average_days_in_stock ? `${summary.average_days_in_stock.toFixed(1)} (Phones)` : 'N/A';
+
                 let tableHtml = '';
+
                 if(data.transactions && data.transactions.length > 0) {
-                     data.transactions.forEach(tx => {
-                        const profit = tx.profit_loss === null ? 0 : tx.profit_loss;
-                        const profitColor = profit >= 0 ? 'text-green-600' : 'text-red-600';
-                        tableHtml += `<tr><td class="px-4 py-3 text-sm font-medium text-gray-800">${tx.transaction_id}</td><td class="px-4 py-3 text-sm">${tx.transaction_date}</td><td class="px-4 py-3 text-sm">${tx.model_name}</td><td class="px-4 py-3 text-sm text-center">${tx.grade ? tx.grade : 'N/A'}</td><td class="px-4 py-3 text-sm text-right">$${(tx.final_sale_price || 0).toFixed(2)}</td><td class="px-4 py-3 text-sm text-right font-medium ${profitColor}">$${profit.toFixed(2)}</td></tr>`;
+                    // NEW: Sort transactions by date (newest first), with transaction ID as a tie-breaker.
+                    data.transactions.sort((a, b) => {
+                        if (b.transaction_date > a.transaction_date) return 1;
+                        if (b.transaction_date < a.transaction_date) return -1;
+                        return b.transaction_id - a.transaction_id;
                     });
-                } else { tableHtml = '<tr><td colspan="6" class="text-center py-8 text-gray-500">No transactions match the current filters.</td></tr>'; }
+
+                    // Group transactions by their ID
+                    const groupedTransactions = {};
+                    data.transactions.forEach(tx => {
+                        if (!groupedTransactions[tx.transaction_id]) {
+                            groupedTransactions[tx.transaction_id] = [];
+                        }
+                        groupedTransactions[tx.transaction_id].push(tx);
+                    });
+
+                    // Get the sorted list of transaction IDs from the sorted data
+                    const sortedTxnIds = [...new Set(data.transactions.map(tx => tx.transaction_id))];
+
+                    // Iterate over each group to build the table
+                    sortedTxnIds.forEach((txnId, index) => {
+                        const group = groupedTransactions[txnId];
+                        const bgColorClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50';
+                        
+                        const groupRowsHtml = group.map((tx, rowIndex) => {
+                            const profit = tx.profit_loss === null ? 0 : tx.profit_loss;
+                            const profitColor = profit >= 0 ? 'text-green-600' : 'text-red-600';
+
+                            const transactionInfo = rowIndex === 0
+                                ? `<td class="px-4 py-3 text-sm font-medium text-gray-800">${tx.transaction_id}</td>
+                                   <td class="px-4 py-3 text-sm">${tx.transaction_date}</td>`
+                                : `<td class="px-4 py-3 border-l-2 border-transparent"></td><td class="px-4 py-3"></td>`;
+
+                            return `
+                                <tr>
+                                    ${transactionInfo}
+                                    <td class="px-4 py-3 text-sm">${tx.model_name}</td>
+                                    <td class="px-4 py-3 text-sm text-center">${tx.grade ? tx.grade : 'N/A'}</td>
+                                    <td class="px-4 py-3 text-sm text-right">$${(tx.final_sale_price || 0).toFixed(2)}</td>
+                                    <td class="px-4 py-3 text-sm text-right font-medium ${profitColor}">$${profit.toFixed(2)}</td>
+                                </tr>
+                            `;
+                        }).join('');
+                        
+                        // UPDATED: Changed the border style to be dotted
+                        tableHtml += `<tbody class="${bgColorClass} border-b border-dotted border-gray-400">${groupRowsHtml}</tbody>`;
+                    });
+
+                } else {
+                    tableHtml = '<tbody><tr><td colspan="6" class="text-center py-8 text-gray-500">No transactions match the current filters.</td></tr></tbody>';
+                }
                 tableBody.innerHTML = tableHtml;
+
                 renderHistoryChart(data.transactions);
+
                 document.getElementById('history-results-area').classList.remove('hidden');
-            } catch (error) { tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-500">Error loading data: ${error.message}</td></tr>`; } 
-            finally { hideLoader('history-loader'); }
+            } catch (error) {
+                tableBody.innerHTML = `<tbody><tr><td colspan="6" class="text-center py-8 text-red-500">Error loading data: ${error.message}</td></tr></tbody>`;
+            } finally {
+                hideLoader('history-loader');
+            }
         }
         
         function renderHistoryChart(transactions) {

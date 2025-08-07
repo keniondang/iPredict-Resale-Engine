@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Synthetic Data Generation for a Used iPhone Retail Business (v18 - Multi-Item Transactions)
+Synthetic Data Generation for a Used iPhone Retail Business (v19 - Chronological Transactions)
 
 This script generates the final, high-fidelity dataset, incorporating all iterative refinements.
 
-VERSION 18 UPDATES:
+VERSION 19 UPDATES:
+- Implemented chronological transaction IDs. Transactions are now sorted by date before
+  the final 'transaction_id' is assigned, ensuring that ID=1 is the earliest sale.
 - Implemented multi-item transactions (shopping baskets). A single transaction ID can now
   contain a phone plus one or more compatible accessories.
 - Standardized accessory pricing to a fixed 20% margin over MSRP.
@@ -197,7 +199,10 @@ def generate_products() -> pd.DataFrame:
 def generate_inventory_and_transactions(
     products_df: pd.DataFrame, accessory_compatibility: Dict[int, List[int]]
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Generates both inventory and transaction data using an integrated, chronological simulation."""
+    """
+    Generates inventory and transaction data.
+    MODIFIED: Transaction IDs are now assigned chronologically *after* all transactions are generated.
+    """
     print("Starting integrated simulation...")
     phone_products = products_df[products_df['product_type'] == 'Used Phone'].copy()
     min_tier = phone_products['model_tier'].min()
@@ -206,9 +211,11 @@ def generate_inventory_and_transactions(
     inventory_list, transactions_list = [], []
     total_days_in_history = (END_DATE - START_DATE).days
     acquisition_dates = [START_DATE + timedelta(days=random.randint(0, total_days_in_history)) for _ in range(NUM_PHONE_UNITS)]
-    transaction_id_counter = 1
     
-    # Store generated accessory transactions to meet the quota at the end
+    # This counter now represents a temporary 'basket_id' to group items in a single sale.
+    # It will be replaced by a final, chronological transaction_id later.
+    basket_id_counter = 1
+    
     generated_accessory_sales = 0
     
     for i in range(NUM_PHONE_UNITS):
@@ -234,11 +241,9 @@ def generate_inventory_and_transactions(
             calculated_sale_price = acquisition_price * final_profit_margin
             final_sale_price = min(calculated_sale_price, product_details['original_msrp'])
             
-            # --- Multi-Item Transaction Logic ---
-            phone_t_record = {'transaction_id': transaction_id_counter, 'unit_id': unit_id, 'product_id': product_id, 'store_id': random.choice(ALL_STORE_IDS), 'transaction_date': potential_sale_date.date(), 'age_at_sale_days': (potential_sale_date.date() - product_details['release_date'].date()).days, 'final_sale_price': round(final_sale_price, 2), 'transaction_type': 'Sale'}
+            phone_t_record = {'transaction_id': basket_id_counter, 'unit_id': unit_id, 'product_id': product_id, 'store_id': random.choice(ALL_STORE_IDS), 'transaction_date': potential_sale_date.date(), 'age_at_sale_days': (potential_sale_date.date() - product_details['release_date'].date()).days, 'final_sale_price': round(final_sale_price, 2), 'transaction_type': 'Sale'}
             transactions_list.append(phone_t_record)
             
-            # 40% chance to add accessories to the same basket
             if random.random() < 0.40:
                 num_accessories = random.randint(1, 2)
                 compatible_acc_ids = accessory_compatibility.get(product_id, [])
@@ -246,23 +251,44 @@ def generate_inventory_and_transactions(
                     accessories_to_add = random.sample(compatible_acc_ids, k=min(num_accessories, len(compatible_acc_ids)))
                     for acc_id in accessories_to_add:
                         acc_details = products_df.loc[products_df['product_id'] == acc_id].iloc[0]
-                        transactions_list.append({'transaction_id': transaction_id_counter, 'unit_id': np.nan, 'product_id': acc_id, 'store_id': phone_t_record['store_id'], 'transaction_date': phone_t_record['transaction_date'], 'age_at_sale_days': np.nan, 'final_sale_price': round(acc_details['original_msrp'] * 1.20, 2), 'transaction_type': 'Sale'})
+                        transactions_list.append({'transaction_id': basket_id_counter, 'unit_id': np.nan, 'product_id': acc_id, 'store_id': phone_t_record['store_id'], 'transaction_date': phone_t_record['transaction_date'], 'age_at_sale_days': np.nan, 'final_sale_price': round(acc_details['original_msrp'] * 1.20, 2), 'transaction_type': 'Sale'})
                         generated_accessory_sales += 1
-            transaction_id_counter += 1
+            basket_id_counter += 1
         else:
             unit_record['status'] = 'In Stock'
         inventory_list.append(unit_record)
 
-    # --- Generate Standalone Accessory Sales ---
     num_standalone_accessories = NUM_ACCESSORY_SALES - generated_accessory_sales
     print(f"Generating {num_standalone_accessories} standalone accessory sales...")
     accessory_products = products_df[products_df['product_type'] == 'Accessory']
     for _ in range(num_standalone_accessories):
         product_details = accessory_products.sample(1).iloc[0]
-        transactions_list.append({'transaction_id': transaction_id_counter, 'unit_id': np.nan, 'product_id': product_details['product_id'], 'store_id': random.choice(ALL_STORE_IDS), 'transaction_date': (START_DATE + timedelta(days=random.randint(0, total_days_in_history))).date(), 'age_at_sale_days': np.nan, 'final_sale_price': round(product_details['original_msrp'] * 1.20, 2), 'transaction_type': 'Sale'})
-        transaction_id_counter += 1
+        transactions_list.append({'transaction_id': basket_id_counter, 'unit_id': np.nan, 'product_id': product_details['product_id'], 'store_id': random.choice(ALL_STORE_IDS), 'transaction_date': (START_DATE + timedelta(days=random.randint(0, total_days_in_history))).date(), 'age_at_sale_days': np.nan, 'final_sale_price': round(product_details['original_msrp'] * 1.20, 2), 'transaction_type': 'Sale'})
+        basket_id_counter += 1
         
-    return pd.DataFrame(inventory_list), pd.DataFrame(transactions_list)
+    if not transactions_list:
+        return pd.DataFrame(inventory_list), pd.DataFrame()
+        
+    transactions_df = pd.DataFrame(transactions_list)
+    transactions_df['transaction_date'] = pd.to_datetime(transactions_df['transaction_date'])
+    
+    # Sort all transactions by date, then by the original basket ID to keep items together
+    transactions_df.sort_values(by=['transaction_date', 'transaction_id'], inplace=True)
+    
+    # Get the unique basket IDs in their new chronological order
+    chronological_basket_ids = transactions_df['transaction_id'].unique()
+    
+    # Create a mapping from the original basket ID to the new chronological ID
+    basket_to_new_id_map = {old_id: new_id for new_id, old_id in enumerate(chronological_basket_ids, 1)}
+    
+    # Map the new IDs and overwrite the 'transaction_id' column
+    transactions_df['transaction_id'] = transactions_df['transaction_id'].map(basket_to_new_id_map)
+
+    # Convert date back to a date object
+    transactions_df['transaction_date'] = transactions_df['transaction_date'].dt.date
+
+    return pd.DataFrame(inventory_list), transactions_df
+
 
 def generate_accessory_data(
     products_df: pd.DataFrame, stores_df: pd.DataFrame
@@ -297,7 +323,7 @@ def generate_accessory_data(
 # --- MAIN ORCHESTRATION FUNCTION ---
 def main():
     """Main function to orchestrate the generation of the full 6-table dataset."""
-    print("--- Starting Synthetic Data Generation (v18 - Multi-Item Transactions) ---")
+    print("--- Starting Synthetic Data Generation (v19 - Chronological Transactions) ---")
     if not os.path.exists(OUTPUT_DIRECTORY):
         os.makedirs(OUTPUT_DIRECTORY)
         print(f"Created output directory: {OUTPUT_DIRECTORY}/")
