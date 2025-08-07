@@ -65,8 +65,63 @@ def load_data_from_db(engine, table_name):
         print(f"Error loading table {table_name}: {e}")
         return pd.DataFrame()
 
-# 3. HELPER & UTILITY FUNCTIONS (Unchanged)
+# 3. HELPER & UTILITY FUNCTIONS
 # ==============================================================================
+
+# Add these two functions to model_trainer.py
+
+def define_target_variable(df):
+    """
+    Calculates the time an item spent in stock and categorizes it using quantiles.
+    """
+    df['days_in_stock'] = (df['transaction_date'] - df['acquisition_date']).dt.days
+    df = df[df['days_in_stock'] >= 0]
+
+    if len(df['days_in_stock']) < 3: # Handle case with too little data
+        return df, None
+
+    fast_threshold = df['days_in_stock'].quantile(0.33)
+    medium_threshold = df['days_in_stock'].quantile(0.66)
+
+    print("--- Defining Mover Categories (based on quantiles) ---")
+    print(f"Fast Mover: Sold in <= {fast_threshold:.0f} days")
+    print(f"Medium Mover: Sold between {fast_threshold:.0f} and {medium_threshold:.0f} days")
+    print(f"Dead Stock: Took > {medium_threshold:.0f} days to sell")
+
+    conditions = [
+        df['days_in_stock'] <= fast_threshold,
+        (df['days_in_stock'] > fast_threshold) & (df['days_in_stock'] <= medium_threshold)
+    ]
+    choices = ['Fast Mover', 'Medium Mover']
+    df['mover_category'] = np.select(conditions, choices, default='Dead Stock')
+
+    return df
+
+def engineer_grade_specific_features(df):
+    """
+    Creates features based on sales volume and velocity that are specific
+    to each product AND each grade.
+    """
+    df = df.sort_values('transaction_date').copy()
+    df_indexed = df.set_index('transaction_date')
+    grouping_cols = ['product_id', 'grade']
+    
+    # Feature 1: Grade-specific sales count in last 120 days
+    sales_counts = df_indexed.groupby(grouping_cols)['unit_id'].rolling('120D').count()
+    sales_counts = sales_counts.reset_index(name='grade_specific_sales_last_120d')
+    df = pd.merge(df, sales_counts, on=['transaction_date', 'product_id', 'grade'], how='left')
+
+    # Feature 2: Grade-specific average days to sell in last 120 days
+    avg_days = df_indexed.groupby(grouping_cols)['days_in_stock'].rolling('120D').mean()
+    avg_days = avg_days.reset_index(name='grade_specific_avg_days_last_120d')
+    df = pd.merge(df, avg_days, on=['transaction_date', 'product_id', 'grade'], how='left')
+    
+    # Shift features to prevent data leakage
+    df['grade_specific_sales_last_120d'] = df.groupby(grouping_cols)['grade_specific_sales_last_120d'].shift(1)
+    df['grade_specific_avg_days_last_120d'] = df.groupby(grouping_cols)['grade_specific_avg_days_last_120d'].shift(1)
+    
+    df.fillna(0, inplace=True)
+    return df
 
 def get_predecessor(base_model: str):
     """Finds the predecessor model name (e.g., 'iPhone 14' -> 'iPhone 13')."""
@@ -77,32 +132,43 @@ def get_predecessor(base_model: str):
     return base_model.replace(str(match.group(1)), str(predecessor_version))
 
 def _get_market_demand(data_to_score: pd.DataFrame, sales_history: pd.DataFrame, products_ref: pd.DataFrame, date_col: str, primary_lookback: int, predecessor_lookback: int):
-    """Generic helper function to calculate the market demand feature."""
-    print(f"  - Engineering 'market_demand' feature (lookback: {primary_lookback} days)...")
+    """Generic helper function to calculate the market demand feature, now grade- and storage-specific."""
+    print(f"  - Engineering grade- and storage-specific 'market_demand' feature (lookback: {primary_lookback} days)...")
 
     def calculate_demand(row):
         reference_date = row[date_col]
         base_model = row['base_model']
+        grade = row['grade'] 
+        storage = row['storage_gb'] # Get storage from the row being scored
+
+        # Filter by storage, grade, and base_model
         demand = sales_history[
             (sales_history['base_model'] == base_model) &
+            (sales_history['grade'] == grade) &
+            (sales_history['storage_gb'] == storage) & # <-- ADDED THIS LINE
             (sales_history['transaction_date'] < reference_date) &
             (sales_history['transaction_date'] >= reference_date - timedelta(days=primary_lookback))
         ].shape[0]
+        
         if demand == 0:
             predecessor = get_predecessor(base_model)
             if predecessor and predecessor in products_ref['base_model'].unique():
+                # Filter predecessor by the same storage and grade
                 pred_sales = sales_history[
                     (sales_history['base_model'] == predecessor) &
+                    (sales_history['grade'] == grade) &
+                    (sales_history['storage_gb'] == storage) & # <-- ADDED THIS LINE
                     (sales_history['transaction_date'] < reference_date) &
                     (sales_history['transaction_date'] >= reference_date - timedelta(days=predecessor_lookback))
                 ]
                 if not pred_sales.empty:
+                    # Adjust demand based on the ratio of lookback periods
                     demand = int(np.ceil(pred_sales.shape[0] / (predecessor_lookback / float(primary_lookback))))
         return demand
     return data_to_score.apply(calculate_demand, axis=1)
 
 
-# 4. MODEL TRAINING & DATA BUILDING FUNCTIONS (Updated to use DB)
+# 4. MODEL TRAINING & DATA BUILDING FUNCTIONS
 # ==============================================================================
 
 def train_price_model(inventory: pd.DataFrame, products: pd.DataFrame, models_dir: str):
@@ -142,51 +208,69 @@ def train_price_model(inventory: pd.DataFrame, products: pd.DataFrame, models_di
     print(f"Price prediction model saved successfully to '{output_path}'")
 
 
+# Replace the old train_velocity_model function with this one
+
+from sklearn.ensemble import GradientBoostingClassifier # Add this import at the top of the file
+
 def train_velocity_model(inventory: pd.DataFrame, products: pd.DataFrame, transactions: pd.DataFrame, models_dir: str):
-    """Trains a classification model to predict sales velocity."""
-    print("\n--- [Task] Training Sales Velocity Prediction Model ---")
-    print("Step 1: Preparing data and engineering features...")
+    """
+    Trains an ADVANCED classification model to predict sales velocity using historical, grade-specific features.
+    """
+    print("\n--- [Task] Training ADVANCED Sales Velocity Prediction Model ---")
+
+    # Step 1: Merge data to get a comprehensive history of sold phones
+    print("Step 1: Preparing data for advanced model...")
     sold_units = pd.merge(inventory[inventory['status'] == 'Sold'], transactions[['unit_id', 'transaction_date']], on='unit_id')
     data = pd.merge(sold_units, products, on='product_id')
-    data['days_to_sell'] = (data['transaction_date'] - data['acquisition_date']).dt.days
+    data.dropna(subset=['acquisition_date', 'transaction_date'], inplace=True)
 
-    # --- MODIFICATION START ---
-    # Made the sales velocity thresholds less aggressive.
-    # Fast Mover: < 45 days (previously < 30)
-    # Medium Mover: 45-120 days (previously 30-90)
-    # Dead Stock Risk: > 120 days (previously > 90)
-    print("  - Applying new sales velocity thresholds (Fast: <45d, Medium: 45-120d, Risk: >120d)...")
-    data['sales_velocity_category'] = pd.cut(
-        data['days_to_sell'], 
-        bins=[-1, 45, 120, np.inf], 
-        labels=['Fast Mover', 'Medium Mover', 'Dead Stock Risk']
-    )
-    # --- MODIFICATION END ---
+    # Step 2: Define the target variable ('Fast Mover', 'Medium Mover', 'Dead Stock')
+    print("Step 2: Defining target variable...")
+    labeled_df = define_target_variable(data)
+
+    # Step 3: Engineer sophisticated, grade-specific features
+    print("Step 3: Engineering grade-specific historical features...")
+    featured_df = engineer_grade_specific_features(labeled_df)
+
+    # Step 4: Train the Gradient Boosting model
+    print("Step 4: Training Gradient Boosting Classifier...")
+    features = [
+        'model_tier', 'storage_gb', 'original_msrp',
+        'grade_specific_sales_last_120d',
+        'grade_specific_avg_days_last_120d'
+    ]
+    target = 'mover_category'
+
+    model_df = featured_df.dropna(subset=features + [target])
+    if model_df.empty:
+        print("Could not train velocity model due to lack of historical data.")
+        return
+
+    X = model_df[features]
+    y = model_df[target]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+    # Using the new GradientBoostingClassifier
+    model = GradientBoostingClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+
+    print("\nModel Performance on Test Set:")
+    y_pred = model.predict(X_test)
+    print(classification_report(y_test, y_pred, zero_division=0))
+
+    # Step 5: Save the model AND the data required for prediction
+    print("Step 5: Saving model and prediction data artifacts...")
     
-    data.dropna(subset=['sales_velocity_category'], inplace=True)
-    data['days_since_model_release'] = (data['acquisition_date'] - data['release_date']).dt.days
-    sales_history = pd.merge(transactions, products, on='product_id')[['base_model', 'transaction_date']]
-    data['market_demand'] = _get_market_demand(data, sales_history, products, 'acquisition_date', 14, 90)
-    feature_columns = ['grade', 'storage_gb', 'model_tier', 'original_msrp', 'days_since_model_release', 'market_demand']
-    categorical_features = ['grade', 'model_tier']
-    X = data[feature_columns]
-    y = data['sales_velocity_category']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
-    print("Step 2: Training classification model...")
-    preprocessor = ColumnTransformer(transformers=[('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)], remainder='passthrough')
-    pipeline = Pipeline(steps=[('preprocessor', preprocessor), ('classifier', RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced'))])
-    pipeline.fit(X_train, y_train)
-    print("\nModel Performance:")
-    print("--- Training Set ---")
-    y_train_pred = pipeline.predict(X_train)
-    print(classification_report(y_train, y_train_pred))
-    print("--- Test Set ---")
-    y_test_pred = pipeline.predict(X_test)
-    print(classification_report(y_test, y_test_pred))
-    print("Step 3: Saving model pipeline...")
-    output_path = os.path.join(models_dir, 'velocity_model.joblib')
+    # The API will now need the model, the feature list, and the historical data with features
+    pipeline = {
+        'model': model,
+        'features': features,
+        'historical_data': featured_df
+    }
+    output_path = os.path.join(models_dir, 'velocity_model_advanced.joblib')
     joblib.dump(pipeline, output_path)
-    print(f"Sales velocity model saved successfully to '{output_path}'")
+    print(f"Advanced sales velocity pipeline saved successfully to '{output_path}'")
 
 
 def train_dynamic_selling_price_model(inventory: pd.DataFrame, products: pd.DataFrame, transactions: pd.DataFrame, models_dir: str):
@@ -200,8 +284,24 @@ def train_dynamic_selling_price_model(inventory: pd.DataFrame, products: pd.Data
     data['days_since_model_release'] = (data['transaction_date'] - data['release_date']).dt.days
     data['days_since_successor_release'] = (data['transaction_date'] - data['successor_release_date']).dt.days
     data['days_since_successor_release'].fillna(-999, inplace=True)
+    
+    # This sales_history is for a different model and does not need the grade-specific logic
     sales_history = pd.merge(transactions, products, on='product_id')[['base_model', 'transaction_date']]
-    data['market_demand_7_days'] = _get_market_demand(data, sales_history, products, 'transaction_date', 7, 7)
+    
+    # Local helper function for this model, which is NOT grade-specific
+    def _get_demand_for_selling_price(data_to_score, sales_hist, prods_ref, date_col):
+        def calc_demand(row):
+            ref_date = row[date_col]
+            base_mod = row['base_model']
+            demand = sales_hist[(sales_hist['base_model'] == base_mod) & (sales_hist['transaction_date'] < ref_date) & (sales_hist['transaction_date'] >= ref_date - timedelta(days=7))].shape[0]
+            if demand == 0:
+                pred = get_predecessor(base_mod)
+                if pred and pred in prods_ref['base_model'].unique():
+                    demand = sales_hist[(sales_hist['base_model'] == pred) & (sales_hist['transaction_date'] < ref_date) & (sales_hist['transaction_date'] >= ref_date - timedelta(days=7))].shape[0]
+            return demand
+        return data_to_score.apply(calc_demand, axis=1)
+
+    data['market_demand_7_days'] = _get_demand_for_selling_price(data, sales_history, products, 'transaction_date')
     
     feature_columns = [
         'original_msrp', 

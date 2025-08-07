@@ -73,9 +73,6 @@
                 <button data-tab="discontinuation" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
                     Discontinuation Alerts
                 </button>
-                <button data-tab="history" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
-                    Transaction History
-                </button>
             </nav>
         </div>
 
@@ -146,7 +143,7 @@
                     </div>
                 </div>
             </div>
-            <!-- This is a single-line comment 
+
             <div id="forecast-content" class="tab-pane hidden">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm">
@@ -178,7 +175,6 @@
                     </div>
                 </div>
             </div>
-            -->
 
             <div id="recommendations-content" class="tab-pane hidden">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -228,86 +224,12 @@
                     </div>
                 </div>
             </div>
-
-            <div id="history-content" class="tab-pane hidden">
-                <div class="bg-white p-4 rounded-xl shadow-sm mb-6">
-                    <h3 class="text-lg font-medium mb-3">Filter Transactions</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-                        <div>
-                            <label for="filter-store" class="block text-sm font-medium text-gray-700">Store</label>
-                            <select id="filter-store" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                <option value="">All Stores</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="filter-model" class="block text-sm font-medium text-gray-700">Phone Model</label>
-                            <select id="filter-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                <option value="">All Models</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="filter-start-date" class="block text-sm font-medium text-gray-700">Start Date</label>
-                            <input type="date" id="filter-start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        </div>
-                        <div>
-                            <label for="filter-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
-                            <input type="date" id="filter-end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                        </div>
-                        <div class="flex space-x-2">
-                            <button id="filter-apply" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Filter</button>
-                            <button id="filter-reset" class="w-full bg-white text-gray-700 py-2 px-4 rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="history-loader" class="flex justify-center items-center h-64">
-                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
-                </div>
-                <div id="history-container" class="space-y-6 hidden">
-                    <div id="history-summary-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div>
-                    
-                    <div class="bg-white p-6 rounded-xl shadow-sm">
-                        <h2 class="text-xl font-semibold mb-4">Transaction Trends</h2>
-                        <div id="history-chart-container">
-                             <canvas id="history-chart"></canvas>
-                        </div>
-                        <div id="history-chart-placeholder" class="text-center text-gray-500 py-16 hidden">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                            <h3 class="mt-2 text-sm font-medium text-gray-900">No Data to Display</h3>
-                            <p class="mt-1 text-sm text-gray-500">Apply filters to see transaction trends.</p>
-                        </div>
-                    </div>
-                     <div class="bg-white p-6 rounded-xl shadow-sm">
-                         <h2 class="text-xl font-semibold mb-4">Detailed Transaction Log</h2>
-                         <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
-                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Store</th>
-                                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
-                                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
-                                        <th scope="col" class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Profit</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="history-table-body" class="bg-white divide-y divide-gray-200">
-                                    </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                <div id="history-error" class="text-red-500"></div>
-            </div>
         </main>
     </div>
 
     <script>
         const API_BASE_URL = 'http://127.0.0.1:5000/api';
         let forecastChartInstance = null;
-        let historyChartInstance = null;
 
         // --- Helper Functions ---
         const showLoader = (loaderId) => document.getElementById(loaderId).classList.remove('hidden');
@@ -357,8 +279,6 @@
 
                 if (tab === 'inventory') {
                     loadInventoryList();
-                } else if (tab === 'history') {
-                    loadTransactionHistory();
                 }
             }
         });
@@ -756,192 +676,11 @@
             }
         }
 
-        // --- Transaction History Logic ---
-        async function populateHistoryFilters() {
-            try {
-                const data = await apiFetch('/filter_options');
-                const storeSelect = document.getElementById('filter-store');
-                const modelSelect = document.getElementById('filter-model');
-
-                data.stores.forEach(store => {
-                    storeSelect.innerHTML += `<option value="${store}">${store}</option>`;
-                });
-
-                data.models.forEach(model => {
-                    modelSelect.innerHTML += `<option value="${model}">${model}</option>`;
-                });
-            } catch (error) {
-                console.error("Failed to load history filters:", error);
-            }
-        }
-
-        async function loadTransactionHistory() {
-            const loader = document.getElementById('history-loader');
-            const container = document.getElementById('history-container');
-            const errorDiv = document.getElementById('history-error');
-            const summaryContainer = document.getElementById('history-summary-cards');
-            const tableBody = document.getElementById('history-table-body');
-            const chartCanvas = document.getElementById('history-chart');
-            const chartPlaceholder = document.getElementById('history-chart-placeholder');
-            const chartContainer = document.getElementById('history-chart-container');
-
-            const store = document.getElementById('filter-store').value;
-            const model = document.getElementById('filter-model').value;
-            const startDate = document.getElementById('filter-start-date').value;
-            const endDate = document.getElementById('filter-end-date').value;
-
-            const params = new URLSearchParams();
-            if (store) params.append('store', store);
-            if (model) params.append('model', model);
-            if (startDate) params.append('start_date', startDate);
-            if (endDate) params.append('end_date', endDate);
-            const queryString = params.toString();
-
-            showLoader('history-loader');
-            container.classList.add('hidden');
-            errorDiv.textContent = '';
-
-            try {
-                const data = await apiFetch(`/transactions/history?${queryString}`);
-                
-                // Populate Summary Cards
-                const summary = data.summary;
-                summaryContainer.innerHTML = `
-                    <div class="bg-white p-4 rounded-lg shadow-sm border">
-                        <p class="text-sm text-gray-500">Total Revenue</p>
-                        <p class="text-2xl font-semibold text-green-600">$${summary.total_revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-lg shadow-sm border">
-                        <p class="text-sm text-gray-500">Total Cost of Goods Sold</p>
-                        <p class="text-2xl font-semibold text-red-600">$${summary.total_cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-lg shadow-sm border">
-                        <p class="text-sm text-gray-500">Total Profit</p>
-                        <p class="text-2xl font-semibold ${summary.total_profit >= 0 ? 'text-blue-600' : 'text-red-600'}">$${summary.total_profit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-lg shadow-sm border">
-                        <p class="text-sm text-gray-500">Units Sold</p>
-                        <p class="text-2xl font-semibold text-gray-700">${summary.units_sold}</p>
-                    </div>
-                `;
-
-                // Populate Table
-                tableBody.innerHTML = '';
-                if (data.history.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-4">No transactions found for the selected filters.</td></tr>';
-                } else {
-                    data.history.forEach(item => {
-                        const profitColor = item.profit >= 0 ? 'text-green-600' : 'text-red-600';
-                        tableBody.innerHTML += `
-                            <tr>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.transaction_date}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${item.model_name} (Grade ${item.grade || 'N/A'})</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">${item.store_name}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${item.acquisition_price ? item.acquisition_price.toFixed(2) : '0.00'}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${item.final_sale_price ? item.final_sale_price.toFixed(2) : '0.00'}</td>
-                                <td class="px-4 py-3 whitespace-nowrap text-sm font-semibold text-right ${profitColor}">$${item.profit ? item.profit.toFixed(2) : '0.00'}</td>
-                            </tr>
-                        `;
-                    });
-                }
-                
-                // Handle Chart
-                if (historyChartInstance) {
-                    historyChartInstance.destroy();
-                }
-
-                if (data.history.length > 0) {
-                    chartContainer.classList.remove('hidden');
-                    chartPlaceholder.classList.add('hidden');
-
-                    const dailyData = {};
-                    data.history.forEach(item => {
-                        const date = item.transaction_date;
-                        if (!dailyData[date]) {
-                            dailyData[date] = { revenue: 0, profit: 0, units: 0 };
-                        }
-                        dailyData[date].revenue += item.final_sale_price || 0;
-                        dailyData[date].profit += item.profit || 0;
-                        dailyData[date].units += 1;
-                    });
-
-                    const sortedDates = Object.keys(dailyData).sort((a, b) => new Date(a) - new Date(b));
-                    const labels = sortedDates;
-                    const revenueData = sortedDates.map(date => dailyData[date].revenue);
-                    const profitData = sortedDates.map(date => dailyData[date].profit);
-                    const unitsData = sortedDates.map(date => dailyData[date].units);
-
-                    const ctx = chartCanvas.getContext('2d');
-                    historyChartInstance = new Chart(ctx, {
-                        type: 'bar',
-                        data: {
-                            labels: labels,
-                            datasets: [{
-                                label: 'Revenue',
-                                data: revenueData,
-                                backgroundColor: 'rgba(79, 70, 229, 0.6)',
-                                yAxisID: 'y-amount',
-                            }, {
-                                label: 'Profit',
-                                data: profitData,
-                                backgroundColor: 'rgba(5, 150, 105, 0.6)',
-                                yAxisID: 'y-amount',
-                            }, {
-                                label: 'Units Sold',
-                                data: unitsData,
-                                type: 'line',
-                                borderColor: 'rgba(219, 39, 119, 0.8)',
-                                backgroundColor: 'rgba(219, 39, 119, 0.1)',
-                                yAxisID: 'y-units',
-                                tension: 0.1
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            interaction: { mode: 'index', intersect: false },
-                            scales: {
-                                x: { title: { display: true, text: 'Date' } },
-                                'y-amount': {
-                                    type: 'linear',
-                                    display: true,
-                                    position: 'left',
-                                    title: { display: true, text: 'Amount ($)' }
-                                },
-                                'y-units': {
-                                    type: 'linear',
-                                    display: true,
-                                    position: 'right',
-                                    title: { display: true, text: 'Units Sold' },
-                                    grid: { drawOnChartArea: false },
-                                    ticks: { precision: 0 }
-                                }
-                            },
-                            plugins: {
-                                legend: { position: 'top' },
-                                tooltip: { mode: 'index', intersect: false }
-                            }
-                        }
-                    });
-                } else {
-                    chartContainer.classList.add('hidden');
-                    chartPlaceholder.classList.remove('hidden');
-                }
-                
-                container.classList.remove('hidden');
-
-            } catch (error) {
-                errorDiv.textContent = `Error loading transaction history: ${error.message}`;
-            } finally {
-                hideLoader('history-loader');
-            }
-        }
-
 
         // --- Initial Load ---
         document.addEventListener('DOMContentLoaded', () => {
             populatePhoneModels();
             loadDiscontinuationList();
-            populateHistoryFilters();
             updateClock();
             setInterval(updateClock, 1000);
             
@@ -963,15 +702,6 @@
                     accordionContainer.querySelectorAll('.inventory-table-row').forEach(r => r.classList.remove('selected'));
                     row.classList.add('selected');
                 }
-            });
-
-            document.getElementById('filter-apply').addEventListener('click', loadTransactionHistory);
-            document.getElementById('filter-reset').addEventListener('click', () => {
-                document.getElementById('filter-store').value = '';
-                document.getElementById('filter-model').value = '';
-                document.getElementById('filter-start-date').value = '';
-                document.getElementById('filter-end-date').value = '';
-                loadTransactionHistory();
             });
         });
 

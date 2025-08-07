@@ -80,58 +80,73 @@ class PricePredictor:
         }
         return {"model_appraised": model_name, "grade": grade, "predicted_price_range": price_prediction}
 
-class VelocityPredictor:
-    """Uses the pre-trained sales velocity model."""
-    def __init__(self, model_path, products_df, inventory_df, transactions_df):
-        self.pipeline = joblib.load(model_path)
-        products_df_phones = products_df[products_df['product_type'] == 'Used Phone'].copy()
-        products_df_phones['base_model'] = products_df_phones['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
-        products_df_phones['release_date'] = pd.to_datetime(products_df_phones['release_date'], errors='coerce')
-        self.products_df = products_df_phones
-        sold_units = pd.merge(inventory_df[inventory_df['status'] == 'Sold'], transactions_df[['unit_id', 'transaction_date']], on='unit_id')
-        sold_units['transaction_date'] = pd.to_datetime(sold_units['transaction_date'])
-        self.sales_history = pd.merge(sold_units, self.products_df[['product_id', 'base_model']], on='product_id')
+# Delete the old VelocityPredictor class in app.py and replace it with this
 
-    def _get_live_market_demand(self, base_model: str, appraisal_date: datetime):
-        demand = self.sales_history[(self.sales_history['base_model'] == base_model) & (self.sales_history['transaction_date'] < appraisal_date) & (self.sales_history['transaction_date'] >= appraisal_date - timedelta(days=30))].shape[0]
-        if demand == 0:
-            match = re.search(r'(\d+)', base_model)
-            if match:
-                predecessor = base_model.replace(str(match.group(1)), str(int(match.group(1)) - 1))
-                if predecessor in self.products_df['base_model'].unique():
-                    pred_sales = self.sales_history[(self.sales_history['base_model'] == predecessor) & (self.sales_history['transaction_date'] < appraisal_date) & (self.sales_history['transaction_date'] >= appraisal_date - timedelta(days=90))]
-                    if not pred_sales.empty: demand = int(np.ceil(pred_sales.shape[0] / (90 / 7.0)))
-        return demand
+class AdvancedVelocityPredictor:
+    """Uses the pre-trained ADVANCED sales velocity model."""
+    def __init__(self, model_path, products_df):
+        try:
+            pipeline = joblib.load(model_path)
+            self.model = pipeline['model']
+            self.features = pipeline['features']
+            self.historical_data = pipeline['historical_data']
+            self.products_df = products_df
+            print("Successfully loaded ADVANCED velocity model pipeline.")
+        except Exception as e:
+            print(f"FATAL: Could not load advanced velocity model. Error: {e}")
+            raise e
 
-    # --- MODIFICATION START ---
-    # The method now returns the features used for generating an explanation.
-    def predict(self, model_name: str, grade: str, appraisal_date_str: str):
-        appraisal_date = pd.to_datetime(appraisal_date_str)
-        phone_details_df = self.products_df[self.products_df['model_name'] == model_name]
-        if phone_details_df.empty: return {"error": f"Model '{model_name}' not found."}
-        phone_details = phone_details_df.iloc[0]
-        days_since_release = (appraisal_date - phone_details['release_date']).days
-        market_demand = self._get_live_market_demand(phone_details['base_model'], appraisal_date)
+    def predict(self, model_name: str, grade: str):
+        """
+        Generates a sales velocity prediction by looking up the most recent
+        historical data for a specific model and grade.
+        """
+        # Find the product_id for the given model_name
+        product_info = self.products_df[self.products_df['model_name'] == model_name]
+        if product_info.empty:
+            return {"error": f"Model '{model_name}' not found."}
         
-        features = {
-            'grade': grade, 
-            'storage_gb': phone_details['storage_gb'], 
-            'model_tier': phone_details['model_tier'], 
-            'original_msrp': phone_details['original_msrp'], 
-            'days_since_model_release': days_since_release, 
-            'market_demand': market_demand
-        }
+        product_id = product_info.iloc[0]['product_id']
+        product_details = self.products_df[self.products_df['product_id'] == product_id].iloc[0]
+
+        # Get the most recent feature values for this specific product and grade
+        item_history = self.historical_data[
+            (self.historical_data['product_id'] == product_id) & 
+            (self.historical_data['grade'] == grade)
+        ].sort_values('transaction_date', ascending=False)
+
+        if item_history.empty:
+            # If no history for this specific grade, assume 0 for features
+            sales_count_recent = 0
+            avg_days_recent = 0
+            reason = f"No sales history found for a Grade '{grade}' {model_name}. Predicting based on model tier and MSRP only."
+        else:
+            # Use the latest available historical record for features
+            latest_stats = item_history.iloc[0]
+            sales_count_recent = latest_stats['grade_specific_sales_last_120d']
+            avg_days_recent = latest_stats['grade_specific_avg_days_last_120d']
+            reason = f"Based on historical data for Grade '{grade}' units: The average time to sell was {avg_days_recent:.1f} days, with {int(sales_count_recent)} units sold in the prior 120-day period."
+
+        # Construct the feature DataFrame for prediction
+        prediction_data = pd.DataFrame([{
+            'model_tier': product_details['model_tier'],
+            'storage_gb': product_details['storage_gb'],
+            'original_msrp': product_details['original_msrp'],
+            'grade_specific_sales_last_120d': sales_count_recent,
+            'grade_specific_avg_days_last_120d': avg_days_recent
+        }])
         
-        prediction = self.pipeline.predict(pd.DataFrame([features]))[0]
-        
+        # Ensure correct feature order
+        prediction_data = prediction_data[self.features]
+
+        predicted_category = self.model.predict(prediction_data)[0]
+
         return {
-            "model_appraised": model_name, 
-            "grade": grade, 
-            "predicted_sales_velocity": prediction,
-            "market_demand": market_demand,
-            "days_since_release": days_since_release
+            "model_appraised": model_name,
+            "grade": grade,
+            "predicted_sales_velocity": predicted_category,
+            "velocity_reason": reason # The new model provides a more direct reason
         }
-    # --- MODIFICATION END ---
 
 class DynamicPricePredictor:
     """Uses the pre-trained dynamic selling price model."""
@@ -141,7 +156,7 @@ class DynamicPricePredictor:
         self.inventory_df['acquisition_date'] = pd.to_datetime(self.inventory_df['acquisition_date'])
         products_df_phones = products_df[products_df['product_type'] == 'Used Phone'].copy()
         products_df_phones['base_model'] = products_df_phones['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
-        for col in ['release_date', 'successor_release_date']: 
+        for col in ['release_date', 'successor_release_date']:
             products_df_phones[col] = pd.to_datetime(products_df_phones[col], errors='coerce')
         self.products_df = products_df_phones
         transactions_df['transaction_date'] = pd.to_datetime(transactions_df['transaction_date'])
@@ -188,27 +203,27 @@ class Recommender:
     def recommend_accessories(self, phone_model_name: str, top_n: int = 3, pop_weight: float = 0.4, copurchase_weight: float = 0.6):
         phone_info = self.phones_df[self.phones_df['model_name'] == phone_model_name]
         if phone_info.empty: return []
-        
+
         phone_product_id = phone_info['product_id'].iloc[0]
         phone_base_model = phone_info['base_model'].iloc[0]
 
         compatible_ids = self.compatibility_df[self.compatibility_df['phone_product_id'] == phone_product_id]['accessory_product_id'].tolist()
         if not compatible_ids: return []
-        
+
         scores = {}
         for acc_id in compatible_ids:
             pop_score = self.accessory_popularity.get(acc_id, 0)
             co_purchase_entry = self.co_purchase_df[(self.co_purchase_df['phone_base_model'] == phone_base_model) & (self.co_purchase_df['accessory_product_id'] == acc_id)]
             co_purchase_score = co_purchase_entry['count'].iloc[0] if not co_purchase_entry.empty else 0
             scores[acc_id] = {'pop': pop_score, 'co': co_purchase_score}
-        
+
         if not scores: return []
-        
+
         scores_df = pd.DataFrame.from_dict(scores, orient='index')
         scores_df['pop_norm'] = scores_df['pop'] / scores_df['pop'].max() if scores_df['pop'].sum() != 0 else 0
         scores_df['co_norm'] = scores_df['co'] / scores_df['co'].max() if scores_df['co'].sum() != 0 else 0
         scores_df['final_score'] = (scores_df['pop_norm'] * pop_weight) + (scores_df['co_norm'] * copurchase_weight)
-        
+
         return list(scores_df.sort_values(by='final_score', ascending=False).head(top_n).index)
 
 
@@ -227,7 +242,7 @@ try:
     stores_df_global = pd.read_sql("SELECT * FROM stores", db_engine)
     price_predictor = PricePredictor('models/price_model.joblib', products_df_global)
     dynamic_price_predictor = DynamicPricePredictor('models/dynamic_selling_price_pipeline.joblib', products_df_global, inventory_df_global, transactions_df_global)
-    velocity_predictor = VelocityPredictor('models/velocity_model.joblib', products_df_global, inventory_df_global, transactions_df_global)
+    velocity_predictor = AdvancedVelocityPredictor('models/velocity_model_advanced.joblib', products_df_global)
     recommender = Recommender('models/recommendation_data.joblib', products_df_global)
     discontinuation_list_global = joblib.load('models/discontinuation_list.joblib')
     print("--- All predictors and data loaded successfully. API is ready. ---")
@@ -247,34 +262,11 @@ def get_products():
     except Exception as e:
         return jsonify({"error": f"Could not load products: {e}"}), 500
 
-# --- MODIFICATION START ---
-# Helper function to generate a human-readable reason for the velocity prediction.
-def _generate_velocity_reason(velocity_result: dict) -> str:
-    """Generates a human-readable explanation for the sales velocity prediction."""
-    velocity = velocity_result.get("predicted_sales_velocity")
-    demand = velocity_result.get("market_demand", 0)
-    days_since_release = velocity_result.get("days_since_release", 0)
-
-    # Convert days to a more readable format (years/months)
-    if days_since_release > 365:
-        age_str = f"{days_since_release / 365:.1f} years"
-    else:
-        age_str = f"{days_since_release} days"
-
-    # Define reason templates based on the new, less aggressive thresholds
-    reasons = {
-        "Fast Mover": f"Predicted to sell in under 45 days. This model is relatively recent or has strong market demand ({demand} units sold in the last 30 days).",
-        "Medium Mover": f"Predicted to sell in 45-120 days. Market demand is moderate ({demand} units sold in the last 30 days).",
-        "Dead Stock Risk": f"Predicted to take over 120 days to sell. This is likely due to low market demand ({demand} units sold in last 30 days) and the model's age ({age_str} since release)."
-    }
-    return reasons.get(velocity, "Reason could not be determined.")
-# --- MODIFICATION END ---
-
 @app.route('/api/appraise/buy', methods=['POST'])
 def appraise_buy():
     if not all([price_predictor, velocity_predictor, dynamic_price_predictor]):
         return jsonify({"error": "Predictor models not loaded"}), 500
-    
+
     data = request.get_json()
     model_name = data.get('model_name')
     grade = data.get('grade')
@@ -282,30 +274,27 @@ def appraise_buy():
 
     if not model_name or not grade:
         return jsonify({"error": "model_name and grade are required"}), 400
-    
+
     date_str = datetime.now().strftime('%Y-%m-%d')
     appraisal_date = pd.to_datetime(date_str)
-    
+
     try:
         historical_buy_result = price_predictor.predict(model_name, grade, date_str)
         if "error" in historical_buy_result: return jsonify(historical_buy_result), 404
 
-        # --- MODIFICATION START ---
-        # Get velocity prediction and generate the reason string
-        velocity_result = velocity_predictor.predict(model_name, grade, date_str)
+        velocity_result = velocity_predictor.predict(model_name, grade)
         if "error" in velocity_result: return jsonify(velocity_result), 404
-        velocity_reason = _generate_velocity_reason(velocity_result)
-        # --- MODIFICATION END ---
+        velocity_reason = velocity_result.get("velocity_reason") # Get the reason directly from the new predictor
 
         phone_details_df = dynamic_price_predictor.products_df[dynamic_price_predictor.products_df['model_name'] == model_name]
         if phone_details_df.empty: return jsonify({"error": f"Model '{model_name}' not found for selling price."}), 404
-        
+
         full_details = phone_details_df.iloc[0]
         features = {
-            'original_msrp': full_details['original_msrp'], 'storage_gb': full_details['storage_gb'], 'grade': grade, 
-            'model_tier': full_details['model_tier'], 'base_model': full_details['base_model'], 
-            'days_since_model_release': (appraisal_date - full_details['release_date']).days, 
-            'days_since_successor_release': (appraisal_date - full_details['successor_release_date']).days if pd.notna(full_details['successor_release_date']) else -999, 
+            'original_msrp': full_details['original_msrp'], 'storage_gb': full_details['storage_gb'], 'grade': grade,
+            'model_tier': full_details['model_tier'], 'base_model': full_details['base_model'],
+            'days_since_model_release': (appraisal_date - full_details['release_date']).days,
+            'days_since_successor_release': (appraisal_date - full_details['successor_release_date']).days if pd.notna(full_details['successor_release_date']) else -999,
             'market_demand_7_days': dynamic_price_predictor._get_live_market_demand(full_details['base_model'], appraisal_date)
         }
         features_processed = dynamic_price_predictor.pipeline['preprocessor'].transform(pd.DataFrame([features]))
@@ -323,21 +312,18 @@ def appraise_buy():
         if historical_median_buy > profit_target_range["high"]:
             market_alert = True
 
-        # --- MODIFICATION START ---
-        # Add the velocity reason to the response object
         response = {
-            "model_appraised": historical_buy_result.get("model_appraised"), 
-            "grade": historical_buy_result.get("grade"), 
-            "historically_based_buy_price": historical_buy_result.get("predicted_price_range"), 
+            "model_appraised": historical_buy_result.get("model_appraised"),
+            "grade": historical_buy_result.get("grade"),
+            "historically_based_buy_price": historical_buy_result.get("predicted_price_range"),
             "predicted_sales_velocity": velocity_result.get("predicted_sales_velocity"),
             "velocity_reason": velocity_reason,
             "predicted_selling_price_range": selling_price_prediction,
             "profit_targeted_buy_price_range": {k: round(v, 2) for k, v in profit_target_range.items()},
             "market_alert": market_alert
         }
-        # --- MODIFICATION END ---
         return jsonify(response)
-    
+
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
 
@@ -397,113 +383,6 @@ def get_discontinuation_list():
         return jsonify({"error": "Discontinuation list not loaded"}), 500
     return jsonify(discontinuation_list_global)
 
-# Add this endpoint in your app.py file
-@app.route('/api/filter_options', methods=['GET'])
-def get_filter_options():
-    """Endpoint to get unique store names and phone models for filtering."""
-    if not db_engine:
-        return jsonify({"error": "Database connection not available"}), 500
-    try:
-        with db_engine.connect() as connection:
-            stores_query = text("SELECT DISTINCT store_name FROM stores ORDER BY store_name;")
-            stores = [row[0] for row in connection.execute(stores_query).fetchall()]
-
-            models_query = text("""
-                SELECT DISTINCT p.model_name
-                FROM products p
-                INNER JOIN inventory_units i ON p.product_id = i.product_id
-                WHERE i.status = 'Sold'
-                ORDER BY p.model_name;
-            """)
-            models = [row[0] for row in connection.execute(models_query).fetchall()]
-
-        return jsonify({
-            "stores": stores,
-            "models": models
-        })
-    except Exception as e:
-        print(f"ERROR in get_filter_options: {e}")
-        return jsonify({"error": f"Could not fetch filter options: {str(e)}"}), 500
-
-
-# Replace your existing get_transaction_history function with this one
-@app.route('/api/transactions/history', methods=['GET'])
-def get_transaction_history():
-    """Endpoint to get a summary and detailed list of all sales transactions, with filtering."""
-    if not db_engine:
-        return jsonify({"error": "Database connection not available"}), 500
-
-    # Get filter parameters from the request URL
-    store_filter = request.args.get('store', None)
-    model_filter = request.args.get('model', None)
-    start_date_filter = request.args.get('start_date', None)
-    end_date_filter = request.args.get('end_date', None)
-
-    base_query = """
-        SELECT
-            t.transaction_id, t.transaction_date,
-            p.model_name, i.grade, s.store_name,
-            i.acquisition_price, t.final_sale_price
-        FROM transactions t
-        INNER JOIN inventory_units i ON t.unit_id = i.unit_id
-        INNER JOIN products p ON i.product_id = p.product_id
-        INNER JOIN stores s ON i.store_id = s.store_id
-    """
-    conditions = ["i.status = 'Sold'"]
-    params = {}
-
-    if store_filter:
-        conditions.append("s.store_name = :store")
-        params['store'] = store_filter
-    if model_filter:
-        conditions.append("p.model_name = :model")
-        params['model'] = model_filter
-    if start_date_filter:
-        conditions.append("t.transaction_date >= :start_date")
-        params['start_date'] = start_date_filter
-    if end_date_filter:
-        conditions.append("t.transaction_date <= :end_date")
-        params['end_date'] = end_date_filter
-
-    query = base_query + " WHERE " + " AND ".join(conditions) + " ORDER BY t.transaction_date DESC;"
-
-    try:
-        with db_engine.connect() as connection:
-            result = connection.execute(text(query), params)
-            rows = result.fetchall()
-            columns = result.keys()
-
-        if not rows:
-            return jsonify({
-                "summary": {"total_revenue": 0, "total_cost": 0, "total_profit": 0, "units_sold": 0},
-                "history": []
-            })
-
-        history_df = pd.DataFrame(rows, columns=columns)
-        history_df['acquisition_price'] = pd.to_numeric(history_df['acquisition_price'], errors='coerce').fillna(0)
-        history_df['final_sale_price'] = pd.to_numeric(history_df['final_sale_price'], errors='coerce').fillna(0)
-        history_df['profit'] = history_df['final_sale_price'] - history_df['acquisition_price']
-
-        summary = {
-            "total_revenue": round(float(history_df['final_sale_price'].sum()), 2),
-            "total_cost": round(float(history_df['acquisition_price'].sum()), 2),
-            "total_profit": round(float(history_df['profit'].sum()), 2),
-            "units_sold": int(len(history_df))
-        }
-
-        history_df['transaction_date'] = pd.to_datetime(history_df['transaction_date']).dt.strftime('%Y-%m-%d')
-        history_df = history_df.replace({np.nan: None})
-        history_list = history_df.to_dict('records')
-
-        return jsonify({"summary": summary, "history": history_list})
-
-    except Exception as e:
-        print(f"--- DETAILED DATABASE ERROR ---")
-        print(f"ERROR TYPE: {type(e).__name__}")
-        print(f"ERROR DETAILS: {e}")
-        print(f"-------------------------------")
-        return jsonify({"error": f"A database error occurred. Please check the server console for detailed logs."}), 500
-
 @app.route('/api/demand_forecast', methods=['POST'])
 def get_product_demand_forecast():
     data = request.get_json()
@@ -531,7 +410,7 @@ def get_product_demand_forecast():
         future_df['cap'] = future_df['ds'].apply(calculate_cap)
         future_df['floor'] = 0
         forecast_df = model.predict(future_df)
-        
+
         # Calculate total forecast for the period
         total_forecast = forecast_df['yhat'][-int(periods):].sum()
 
@@ -539,7 +418,7 @@ def get_product_demand_forecast():
         daily_data = forecast_df[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(int(periods)).copy()
         daily_data.rename(columns={'ds': 'date', 'yhat': 'prediction', 'yhat_lower': 'lower_bound', 'yhat_upper': 'upper_bound'}, inplace=True)
         daily_data['date'] = daily_data['date'].dt.strftime('%Y-%m-%d')
-        
+
         # Build the final response object
         response_data = {
             "daily_data": daily_data.to_dict('records'),
