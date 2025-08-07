@@ -62,11 +62,9 @@
                 <button data-tab="inventory" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
                     Inventory Pricing
                 </button>
-                <!-- 
-                <button data-tab="forecast" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
-                    Demand Forecast
+                 <button data-tab="history" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
+                    Transaction History
                 </button>
-                -->
                  <button data-tab="recommendations" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none">
                     Accessory Cross-Sell
                 </button>
@@ -144,37 +142,80 @@
                 </div>
             </div>
 
-            <div id="forecast-content" class="tab-pane hidden">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm">
-                        <h2 class="text-xl font-semibold mb-4">Demand Forecast</h2>
-                        <form id="forecast-form" class="space-y-4">
-                             <div>
-                                <label for="forecast-model" class="block text-sm font-medium text-gray-700">Phone Model</label>
-                                <select id="forecast-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                    <option>Loading models...</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="forecast-days" class="block text-sm font-medium text-gray-700">Forecast Period (days)</label>
-                                <input type="number" id="forecast-days" value="90" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                            </div>
-                            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                Forecast Demand
-                            </button>
-                        </form>
-                    </div>
-                    <div class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm">
-                        <h2 class="text-xl font-semibold mb-4">Forecast Chart</h2>
-                        <div id="forecast-loader" class="flex justify-center items-center h-96 hidden">
-                            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+            <div id="history-content" class="tab-pane hidden">
+                <div class="bg-white p-6 rounded-xl shadow-sm mb-6">
+                    <h2 class="text-xl font-semibold mb-4">Transaction History & Analysis</h2>
+                    <form id="history-filter-form" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
+                        <div>
+                            <label for="history-model" class="block text-sm font-medium text-gray-700">Model</label>
+                            <select id="history-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">All Models</option>
+                            </select>
                         </div>
-                        <canvas id="forecast-chart" class="hidden"></canvas>
-                        <div id="forecast-summary" class="text-center mt-4 hidden"></div>
-                        <div id="forecast-error" class="text-red-500"></div>
+                        <div>
+                            <label for="history-grade" class="block text-sm font-medium text-gray-700">Grade</label>
+                            <select id="history-grade" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">All Grades</option>
+                                <option>A</option><option>B</option><option>C</option><option>D</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="history-store" class="block text-sm font-medium text-gray-700">Store</label>
+                            <select id="history-store" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                <option value="">All Stores</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="history-start-date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                            <input type="date" id="history-start-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="history-end-date" class="block text-sm font-medium text-gray-700">End Date</label>
+                            <input type="date" id="history-end-date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                        </div>
+                        <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Apply</button>
+                    </form>
+                </div>
+
+                <div id="history-loader" class="flex justify-center items-center h-64 hidden">
+                    <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                </div>
+                <div id="history-results-area" class="hidden space-y-6">
+                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-center">
+                        <div class="bg-white p-4 rounded-lg shadow-sm"><p class="text-sm text-gray-500">Total Revenue</p><p id="summary-revenue" class="text-2xl font-semibold"></p></div>
+                        <div class="bg-white p-4 rounded-lg shadow-sm"><p class="text-sm text-gray-500">Total COGS</p><p id="summary-cost" class="text-2xl font-semibold"></p></div>
+                        <div class="bg-white p-4 rounded-lg shadow-sm"><p class="text-sm text-gray-500">Total Profit</p><p id="summary-profit" class="text-2xl font-semibold"></p></div>
+                        <div class="bg-white p-4 rounded-lg shadow-sm"><p class="text-sm text-gray-500">Items Sold</p><p id="summary-items" class="text-2xl font-semibold"></p></div>
+                        <div class="bg-white p-4 rounded-lg shadow-sm"><p class="text-sm text-gray-500">Avg. Days in Stock</p><p id="summary-avg-days" class="text-2xl font-semibold"></p></div>
+                    </div>
+                    <div class="space-y-6">
+                        <div class="bg-white p-6 rounded-xl shadow-sm">
+                             <h3 class="text-lg font-semibold mb-4 text-center">Monthly Profit</h3>
+                             <div class="h-80 relative">
+                                <canvas id="history-chart"></canvas>
+                             </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl shadow-sm">
+                             <h3 class="text-lg font-semibold mb-4">Transactions</h3>
+                             <div class="overflow-auto h-96">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50 sticky top-0"><tr>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
+                                        <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Grade</th>
+                                        <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Sale Price</th>
+                                        <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Profit/Loss</th>
+                                    </tr></thead>
+                                    <tbody id="history-table-body" class="bg-white divide-y divide-gray-200"></tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <div id="forecast-content" class="tab-pane hidden">
+                </div>
 
             <div id="recommendations-content" class="tab-pane hidden">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -230,6 +271,8 @@
     <script>
         const API_BASE_URL = 'http://127.0.0.1:5000/api';
         let forecastChartInstance = null;
+        let historyChartInstance = null;
+
 
         // --- Helper Functions ---
         const showLoader = (loaderId) => document.getElementById(loaderId).classList.remove('hidden');
@@ -279,6 +322,11 @@
 
                 if (tab === 'inventory') {
                     loadInventoryList();
+                } else if (tab === 'history') {
+                    // Load history data only if it hasn't been loaded yet
+                    if(!document.getElementById('history-table-body').innerHTML) {
+                         loadTransactionHistory();
+                    }
                 }
             }
         });
@@ -287,26 +335,42 @@
         async function populatePhoneModels() {
             try {
                 const models = await apiFetch('/products');
-                const appraisalSelect = document.getElementById('appraisal-model');
-                const forecastSelect = document.getElementById('forecast-model');
-                const recommendationSelect = document.getElementById('recommendation-model');
+                const selects = [
+                    document.getElementById('appraisal-model'),
+                    document.getElementById('forecast-model'),
+                    document.getElementById('recommendation-model'),
+                    document.getElementById('history-model')
+                ];
                 
-                appraisalSelect.innerHTML = '';
-                forecastSelect.innerHTML = '';
-                recommendationSelect.innerHTML = '';
-
-                models.forEach(model => {
-                    const option = `<option>${model}</option>`;
-                    appraisalSelect.innerHTML += option;
-                    forecastSelect.innerHTML += option;
-                    recommendationSelect.innerHTML += option;
+                selects.forEach(select => {
+                    if (select) {
+                        const firstOption = select.options[0] ? select.options[0].outerHTML : '';
+                        select.innerHTML = firstOption; // Keep the 'All Models' option if it exists
+                        models.forEach(model => {
+                            select.innerHTML += `<option>${model}</option>`;
+                        });
+                    }
                 });
+
             } catch (error) {
-                 document.getElementById('appraisal-model').innerHTML = '<option>Error loading models</option>';
-                 document.getElementById('forecast-model').innerHTML = '<option>Error loading models</option>';
-                 document.getElementById('recommendation-model').innerHTML = '<option>Error loading models</option>';
+                 console.error("Failed to populate phone models", error);
+                 document.getElementById('appraisal-model').innerHTML = '<option>Error loading</option>';
             }
         }
+        
+        async function populateStores() {
+            try {
+                const stores = await apiFetch('/stores');
+                const historyStoreSelect = document.getElementById('history-store');
+                stores.forEach(store => {
+                    historyStoreSelect.innerHTML += `<option value="${store.store_id}">${store.store_name}</option>`;
+                });
+            } catch (error) {
+                console.error("Failed to populate stores", error);
+                document.getElementById('history-store').innerHTML = '<option>Error loading</option>';
+            }
+        }
+
 
         // --- Appraisal Logic ---
         document.getElementById('appraisal-form').addEventListener('submit', async (e) => {
@@ -513,92 +577,211 @@
                 hideLoader('inventory-accordion-loader');
             }
         }
+        
+        // --- Transaction History Logic ---
+        document.getElementById('history-filter-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loadTransactionHistory();
+        });
+
+        async function loadTransactionHistory() {
+            showLoader('history-loader');
+            document.getElementById('history-results-area').classList.add('hidden');
+            const tableBody = document.getElementById('history-table-body');
+            tableBody.innerHTML = '';
+            
+            const params = new URLSearchParams({
+                model_name: document.getElementById('history-model').value,
+                grade: document.getElementById('history-grade').value,
+                store_id: document.getElementById('history-store').value,
+                start_date: document.getElementById('history-start-date').value,
+                end_date: document.getElementById('history-end-date').value,
+            });
+
+            // Remove empty params
+            for(let [key, val] of params.entries()) {
+                if (!val) {
+                    params.delete(key);
+                }
+            }
+            
+            try {
+                const data = await apiFetch(`/transactions/history?${params.toString()}`);
+                
+                // Update summary
+                const summary = data.summary;
+                document.getElementById('summary-revenue').textContent = summary.total_revenue ? `$${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '$0.00';
+                document.getElementById('summary-cost').textContent = summary.total_cost ? `$${summary.total_cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '$0.00';
+                document.getElementById('summary-profit').textContent = summary.total_profit ? `$${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '$0.00';
+                document.getElementById('summary-items').textContent = summary.total_items_sold || 0;
+                document.getElementById('summary-avg-days').textContent = summary.average_days_in_stock ? summary.average_days_in_stock.toFixed(1) : '0';
+
+
+                // Update table
+                let tableHtml = '';
+                if(data.transactions && data.transactions.length > 0) {
+                     data.transactions.forEach(tx => {
+                        const profit = tx.profit_loss || 0;
+                        const profitColor = profit >= 0 ? 'text-green-600' : 'text-red-600';
+                        tableHtml += `
+                            <tr>
+                                <td class="px-4 py-3 text-sm">${tx.transaction_date}</td>
+                                <td class="px-4 py-3 text-sm">${tx.model_name}</td>
+                                <td class="px-4 py-3 text-sm text-center">${tx.grade}</td>
+                                <td class="px-4 py-3 text-sm text-right">$${tx.final_sale_price.toFixed(2)}</td>
+                                <td class="px-4 py-3 text-sm text-right font-medium ${profitColor}">$${profit.toFixed(2)}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tableHtml = '<tr><td colspan="5" class="text-center py-8 text-gray-500">No transactions match the current filters.</td></tr>';
+                }
+                tableBody.innerHTML = tableHtml;
+
+                // Update Chart
+                renderHistoryChart(data.transactions);
+
+                document.getElementById('history-results-area').classList.remove('hidden');
+            } catch (error) {
+                tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-red-500">Error loading data: ${error.message}</td></tr>`;
+            } finally {
+                hideLoader('history-loader');
+            }
+        }
+        
+        function renderHistoryChart(transactions) {
+            const monthlyProfit = {};
+            if(transactions) {
+                 transactions.forEach(tx => {
+                    const month = tx.transaction_date.substring(0, 7); // YYYY-MM
+                    if (!monthlyProfit[month]) {
+                        monthlyProfit[month] = 0;
+                    }
+                    monthlyProfit[month] += tx.profit_loss;
+                });
+            }
+
+            const sortedMonths = Object.keys(monthlyProfit).sort();
+            const chartLabels = sortedMonths;
+            const chartData = sortedMonths.map(month => monthlyProfit[month]);
+
+            if (historyChartInstance) {
+                historyChartInstance.destroy();
+            }
+            
+            const ctx = document.getElementById('history-chart').getContext('2d');
+            historyChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'Total Profit',
+                        data: chartData,
+                        backgroundColor: chartData.map(v => v >= 0 ? 'rgba(22, 163, 74, 0.6)' : 'rgba(220, 38, 38, 0.6)'),
+                        borderColor: chartData.map(v => v >= 0 ? 'rgb(22, 163, 74)' : 'rgb(220, 38, 38)'),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, ticks: { callback: value => '$' + value } },
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
 
         // --- Forecast Logic ---
-        document.getElementById('forecast-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const model = document.getElementById('forecast-model').value;
-            const days = document.getElementById('forecast-days').value;
-            const chartCanvas = document.getElementById('forecast-chart');
-            const summaryDiv = document.getElementById('forecast-summary');
-            const errorDiv = document.getElementById('forecast-error');
-            
-            showLoader('forecast-loader');
-            chartCanvas.classList.add('hidden');
-            summaryDiv.classList.add('hidden');
-            errorDiv.textContent = '';
-
-            try {
-                const data = await apiFetch('/demand_forecast', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ product_name: model, periods: parseInt(days) })
-                });
-
-                const dailyData = data.daily_data;
-                const labels = dailyData.map(d => d.date);
-                const predictions = dailyData.map(d => d.prediction);
-                const lowerBounds = dailyData.map(d => d.lower_bound);
-                const upperBounds = dailyData.map(d => d.upper_bound);
-
-                if (forecastChartInstance) {
-                    forecastChartInstance.destroy();
-                }
-
-                chartCanvas.classList.remove('hidden');
-                const ctx = chartCanvas.getContext('2d');
-                forecastChartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: 'Predicted Sales',
-                                data: predictions,
-                                borderColor: '#4f46e5',
-                                backgroundColor: '#4f46e5',
-                                tension: 0.1,
-                                fill: false
-                            },
-                            {
-                                label: 'Confidence Interval',
-                                data: upperBounds,
-                                fill: '-1',
-                                backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                                borderColor: 'transparent',
-                                pointRadius: 0,
-                                borderWidth: 0
-                            },
-                             {
-                                label: 'Lower Bound',
-                                data: lowerBounds,
-                                fill: false,
-                                borderColor: 'transparent',
-                                pointRadius: 0,
-                                borderWidth: 0
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        scales: {
-                            y: { beginAtZero: true, title: { display: true, text: 'Daily Units Sold' } },
-                            x: { title: { display: true, text: 'Date' } }
-                        },
-                        plugins: { tooltip: { mode: 'index', intersect: false }, legend: { display: false } }
-                    }
-                });
+        const forecastForm = document.getElementById('forecast-form');
+        if (forecastForm) {
+            forecastForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const model = document.getElementById('forecast-model').value;
+                const days = document.getElementById('forecast-days').value;
+                const chartCanvas = document.getElementById('forecast-chart');
+                const summaryDiv = document.getElementById('forecast-summary');
+                const errorDiv = document.getElementById('forecast-error');
                 
-                // Display the total forecast summary
-                summaryDiv.innerHTML = `<p class="text-gray-600">Estimated Total Demand (${days} days): <span class="font-bold text-xl text-indigo-600">${data.total_forecast} units</span></p>`;
-                summaryDiv.classList.remove('hidden');
+                showLoader('forecast-loader');
+                if(chartCanvas) chartCanvas.classList.add('hidden');
+                if(summaryDiv) summaryDiv.classList.add('hidden');
+                if(errorDiv) errorDiv.textContent = '';
 
-            } catch (error) {
-                errorDiv.textContent = `Error: ${error.message}`;
-            } finally {
-                hideLoader('forecast-loader');
-            }
-        });
+                try {
+                    const data = await apiFetch('/demand_forecast', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ product_name: model, periods: parseInt(days) })
+                    });
+
+                    const dailyData = data.daily_data;
+                    const labels = dailyData.map(d => d.date);
+                    const predictions = dailyData.map(d => d.prediction);
+                    const lowerBounds = dailyData.map(d => d.lower_bound);
+                    const upperBounds = dailyData.map(d => d.upper_bound);
+
+                    if (forecastChartInstance) {
+                        forecastChartInstance.destroy();
+                    }
+
+                    chartCanvas.classList.remove('hidden');
+                    const ctx = chartCanvas.getContext('2d');
+                    forecastChartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [
+                                {
+                                    label: 'Predicted Sales',
+                                    data: predictions,
+                                    borderColor: '#4f46e5',
+                                    backgroundColor: '#4f46e5',
+                                    tension: 0.1,
+                                    fill: false
+                                },
+                                {
+                                    label: 'Confidence Interval',
+                                    data: upperBounds,
+                                    fill: '-1',
+                                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                                    borderColor: 'transparent',
+                                    pointRadius: 0,
+                                    borderWidth: 0
+                                },
+                                 {
+                                    label: 'Lower Bound',
+                                    data: lowerBounds,
+                                    fill: false,
+                                    borderColor: 'transparent',
+                                    pointRadius: 0,
+                                    borderWidth: 0
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                y: { beginAtZero: true, title: { display: true, text: 'Daily Units Sold' } },
+                                x: { title: { display: true, text: 'Date' } }
+                            },
+                            plugins: { tooltip: { mode: 'index', intersect: false }, legend: { display: false } }
+                        }
+                    });
+                    
+                    summaryDiv.innerHTML = `<p class="text-gray-600">Estimated Total Demand (${days} days): <span class="font-bold text-xl text-indigo-600">${data.total_forecast} units</span></p>`;
+                    summaryDiv.classList.remove('hidden');
+
+                } catch (error) {
+                    errorDiv.textContent = `Error: ${error.message}`;
+                } finally {
+                    hideLoader('forecast-loader');
+                }
+            });
+        }
+
 
         // --- Recommendation Logic ---
         document.getElementById('recommendation-form').addEventListener('submit', async (e) => {
@@ -680,6 +863,7 @@
         // --- Initial Load ---
         document.addEventListener('DOMContentLoaded', () => {
             populatePhoneModels();
+            populateStores();
             loadDiscontinuationList();
             updateClock();
             setInterval(updateClock, 1000);

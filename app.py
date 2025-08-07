@@ -262,6 +262,17 @@ def get_products():
     except Exception as e:
         return jsonify({"error": f"Could not load products: {e}"}), 500
 
+@app.route('/api/stores', methods=['GET'])
+def get_stores():
+    """Endpoint to get a list of all stores for filtering."""
+    if stores_df_global is None:
+        return jsonify({"error": "Stores data not loaded"}), 500
+    try:
+        stores_list = stores_df_global[['store_id', 'store_name']].to_dict('records')
+        return jsonify(sorted(stores_list, key=lambda x: x['store_name']))
+    except Exception as e:
+        return jsonify({"error": f"Could not load stores: {e}"}), 500
+
 @app.route('/api/appraise/buy', methods=['POST'])
 def appraise_buy():
     if not all([price_predictor, velocity_predictor, dynamic_price_predictor]):
@@ -359,6 +370,76 @@ def predict_dynamic_sell_price():
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
+@app.route('/api/transactions/history', methods=['GET'])
+def get_transaction_history():
+    """ Endpoint to retrieve and filter transaction history. """
+    try:
+        # Construct the base query
+        query = text("""
+            SELECT
+                t.transaction_id,
+                t.transaction_date,
+                t.final_sale_price,
+                p.model_name,
+                i.grade,
+                i.acquisition_price,
+                i.acquisition_date,
+                s.store_name,
+                s.store_id
+            FROM transactions t
+            JOIN inventory_units i ON t.unit_id = i.unit_id
+            JOIN products p ON i.product_id = p.product_id
+            JOIN stores s ON i.store_id = s.store_id
+            WHERE p.product_type = 'Used Phone'
+        """)
+        with db_engine.connect() as connection:
+            df = pd.read_sql(query, connection)
+
+        # Convert date columns
+        df['transaction_date'] = pd.to_datetime(df['transaction_date'])
+        df['acquisition_date'] = pd.to_datetime(df['acquisition_date'])
+        
+        # Apply filters from request arguments
+        if request.args.get('model_name'):
+            df = df[df['model_name'] == request.args.get('model_name')]
+        if request.args.get('grade'):
+            df = df[df['grade'] == request.args.get('grade')]
+        if request.args.get('store_id'):
+            df = df[df['store_id'] == int(request.args.get('store_id'))]
+        if request.args.get('start_date'):
+            df = df[df['transaction_date'] >= pd.to_datetime(request.args.get('start_date'))]
+        if request.args.get('end_date'):
+            df = df[df['transaction_date'] <= pd.to_datetime(request.args.get('end_date'))]
+
+        if df.empty:
+            return jsonify({"summary": {}, "transactions": []})
+
+        # Calculations
+        df['profit_loss'] = df['final_sale_price'] - df['acquisition_price']
+        df['days_in_stock'] = (df['transaction_date'] - df['acquisition_date']).dt.days
+
+        # Summary Statistics
+        summary = {
+            "total_revenue": df['final_sale_price'].sum(),
+            "total_cost": df['acquisition_price'].sum(),
+            "total_profit": df['profit_loss'].sum(),
+            "total_items_sold": len(df),
+            "average_profit_per_item": df['profit_loss'].mean(),
+            "average_days_in_stock": df['days_in_stock'].mean()
+        }
+
+        # Prepare transaction list for JSON response
+        df['transaction_date'] = df['transaction_date'].dt.strftime('%Y-%m-%d')
+        df.replace({np.nan: None, np.inf: None, -np.inf: None}, inplace=True)
+        transactions = df.to_dict('records')
+        
+        return jsonify({"summary": summary, "transactions": transactions})
+
+    except Exception as e:
+        print(f"Error in /api/transactions/history: {e}")
+        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
 
 @app.route('/api/recommend/accessories', methods=['POST'])
 def get_accessory_recommendations():
