@@ -36,7 +36,6 @@
             --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
             box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
         }
-        /* Custom Modal Styles */
         .modal-overlay {
             transition: opacity 0.3s ease;
         }
@@ -67,7 +66,7 @@
                     Appraisal & Purchase
                 </button>
                 <button data-tab="inventory" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none flex-shrink-0">
-                    Inventory
+                    Inventory & Sales
                 </button>
                  <button data-tab="history" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none flex-shrink-0">
                     Transaction History
@@ -96,19 +95,14 @@
                             <div>
                                 <label for="appraisal-grade" class="block text-sm font-medium text-gray-700">Condition Grade</label>
                                 <select id="appraisal-grade" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                    <option>A</option>
-                                    <option>B</option>
-                                    <option>C</option>
-                                    <option>D</option>
+                                    <option>A</option><option>B</option><option>C</option><option>D</option>
                                 </select>
                             </div>
                              <div>
                                 <label for="desired-profit" class="block text-sm font-medium text-gray-700">Desired Profit ($)</label>
                                 <input type="number" id="desired-profit" value="25" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                             </div>
-                            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                Appraise
-                            </button>
+                            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Appraise</button>
                         </form>
                     </div>
                     <div class="md:col-span-2 space-y-6">
@@ -133,9 +127,7 @@
                                     <label for="purchase-price" class="block text-sm font-medium text-gray-700">Final Purchase Price ($)</label>
                                     <input type="number" step="0.01" id="purchase-price" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="Enter final price...">
                                 </div>
-                                <button type="submit" class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                                    Finalize Purchase
-                                </button>
+                                <button type="submit" class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">Finalize Purchase</button>
                             </form>
                         </div>
                     </div>
@@ -146,26 +138,23 @@
                  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-6 rounded-xl shadow-sm">
                         <h2 class="text-xl font-semibold mb-4">Combined Inventory by Store</h2>
-                        <p class="text-sm text-gray-500 mb-4">Click an item to see its details.</p>
+                        <p class="text-sm text-gray-500 mb-4">Click an item to see its details and initiate a sale.</p>
                         <div id="inventory-accordion-loader" class="flex justify-center items-center h-64">
                             <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
                         </div>
-                        <div id="inventory-accordion-container" class="space-y-2">
-                        </div>
+                        <div id="inventory-accordion-container" class="space-y-2"></div>
                     </div>
                     <div id="inventory-results-container" class="bg-white p-6 rounded-xl shadow-sm">
-                        <h2 class="text-xl font-semibold mb-4">Item Details</h2>
+                        <h2 class="text-xl font-semibold mb-4">Item Details & Sale</h2>
                          <div id="inventory-loader" class="flex justify-center items-center h-48 hidden">
                             <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
                         </div>
                         <div id="inventory-results-placeholder" class="text-center text-gray-500 pt-16">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                             <h3 class="mt-2 text-sm font-medium text-gray-900">No Item Selected</h3>
                             <p class="mt-1 text-sm text-gray-500">Select an item from the inventory list to see its details.</p>
                         </div>
-                        <div id="phone-details-view" class="space-y-4 hidden"></div>
+                        <div id="phone-details-view" class="space-y-6 hidden"></div>
                         <div id="accessory-details-view" class="space-y-4 hidden"></div>
                     </div>
                 </div>
@@ -220,21 +209,14 @@
                     <div class="space-y-6">
                         <div class="bg-white p-6 rounded-xl shadow-sm">
                              <h3 class="text-lg font-semibold mb-4 text-center">Monthly Profit</h3>
-                             <div class="h-80 relative">
-                                <canvas id="history-chart"></canvas>
-                             </div>
+                             <div class="h-80 relative"><canvas id="history-chart"></canvas></div>
                         </div>
                         <div class="bg-white p-6 rounded-xl shadow-sm">
                              <h3 class="text-lg font-semibold mb-4">Transactions</h3>
                              <div class="overflow-auto h-96">
                                 <table class="min-w-full divide-y divide-gray-200">
                                     <thead class="bg-gray-50 sticky top-0"><tr>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">TXN ID</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Model</th>
-                                        <th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Grade</th>
-                                        <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Sale Price</th>
-                                        <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Profit/Loss</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">TXN ID</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Model</th><th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Grade</th><th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Sale Price</th><th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Profit/Loss</th>
                                     </tr></thead>
                                     <tbody id="history-table-body" class="bg-white divide-y divide-gray-200"></tbody>
                                 </table>
@@ -251,12 +233,9 @@
                         <form id="recommendation-form" class="space-y-4">
                             <div>
                                 <label for="recommendation-model" class="block text-sm font-medium text-gray-700">Phone Model</label>
-                                <select id="recommendation-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-                                </select>
+                                <select id="recommendation-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"></select>
                             </div>
-                            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                Get Recommendations
-                            </button>
+                            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Get Recommendations</button>
                         </form>
                     </div>
                     <div id="recommendation-results-container" class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm hidden">
@@ -279,14 +258,9 @@
                     <div id="discontinuation-table-container" class="overflow-x-auto hidden">
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
-                                <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product ID</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Accessory Name</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount of Sales Last 30d</th>
-                                </tr>
+                                <tr><th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product ID</th><th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Accessory Name</th><th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount of Sales Last 30d</th></tr>
                             </thead>
-                            <tbody id="discontinuation-list" class="bg-white divide-y divide-gray-200">
-                                </tbody>
+                            <tbody id="discontinuation-list" class="bg-white divide-y divide-gray-200"></tbody>
                         </table>
                     </div>
                 </div>
@@ -302,12 +276,9 @@
                 </div>
                 <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2" id="modal-title">Success</h3>
                 <div class="mt-2 px-7 py-3">
-                    <p class="text-sm text-gray-500" id="modal-message">
-                        Your action was successful.
-                    </p>
+                    <p class="text-sm text-gray-500" id="modal-message">Your action was successful.</p>
                 </div>
-                <div class="items-center px-4 py-3" id="modal-buttons">
-                    </div>
+                <div class="items-center px-4 py-3" id="modal-buttons"></div>
             </div>
         </div>
     </div>
@@ -317,6 +288,7 @@
         const API_BASE_URL = 'http://127.0.0.1:5000/api';
         let historyChartInstance = null;
         let currentPurchaseInfo = {};
+        let cart = { phone: null, accessories: [], storeId: null };
 
         // --- Helper Functions ---
         const showLoader = (loaderId) => document.getElementById(loaderId).classList.remove('hidden');
@@ -330,9 +302,7 @@
                     if (contentType && contentType.indexOf("application/json") !== -1) {
                         const errorData = await response.json();
                         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-                    } else {
-                        throw new Error(`Server returned an unreadable error: ${response.status} ${response.statusText}`);
-                    }
+                    } else { throw new Error(`Server returned an unreadable error: ${response.status} ${response.statusText}`); }
                 }
                 const text = await response.text();
                 return text ? JSON.parse(text) : {};
@@ -346,10 +316,9 @@
         function showModal({ title, message, confirmText, cancelText, onConfirm, iconType = 'success' }) {
             const modal = document.getElementById('custom-modal');
             document.getElementById('modal-title').textContent = title;
-            document.getElementById('modal-message').innerHTML = message; // Use innerHTML to allow for formatted messages
+            document.getElementById('modal-message').innerHTML = message;
             const buttonsDiv = document.getElementById('modal-buttons');
-            buttonsDiv.innerHTML = ''; // Clear previous buttons
-
+            buttonsDiv.innerHTML = ''; 
             const iconDiv = document.getElementById('modal-icon');
             if (iconType === 'success') {
                 iconDiv.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100';
@@ -361,34 +330,26 @@
                  iconDiv.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100';
                  iconDiv.innerHTML = '<svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
             }
-
-            if (onConfirm) { // This means it's a confirmation dialog
+            if (onConfirm) {
                 const confirmBtn = document.createElement('button');
                 confirmBtn.className = "px-4 py-2 bg-green-500 text-white text-base font-medium rounded-md w-auto shadow-sm hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-300";
                 confirmBtn.textContent = confirmText || 'Confirm';
-                confirmBtn.onclick = () => {
-                    onConfirm();
-                    modal.classList.add('hidden');
-                };
+                confirmBtn.onclick = () => { onConfirm(); modal.classList.add('hidden'); };
                 buttonsDiv.appendChild(confirmBtn);
             }
-
             const closeBtn = document.createElement('button');
             closeBtn.className = "px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-auto shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 ml-2";
             closeBtn.textContent = cancelText || 'Close';
             closeBtn.onclick = () => modal.classList.add('hidden');
             buttonsDiv.appendChild(closeBtn);
-            
             modal.classList.remove('hidden');
         }
-
 
         // --- Live Clock ---
         function updateClock() {
             const now = new Date();
             const timeEl = document.getElementById('current-time');
             const dateEl = document.getElementById('current-date');
-            
             if(timeEl && dateEl) {
                 timeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 dateEl.textContent = now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -397,80 +358,49 @@
 
         // --- Tab Switching Logic ---
         document.getElementById('tabs').addEventListener('click', (e) => {
-            if (e.target.matches('button')) {
-                const tab = e.target.dataset.tab;
-                switchTab(tab);
-            }
+            if (e.target.matches('button')) { switchTab(e.target.dataset.tab); }
         });
 
         function switchTab(tabId) {
             document.querySelectorAll('.tab-button').forEach(button => button.classList.remove('active'));
-            const activeTabButton = document.querySelector(`[data-tab="${tabId}"]`)
-            if(activeTabButton){
-                activeTabButton.classList.add('active');
-            }
-
+            document.querySelector(`[data-tab="${tabId}"]`)?.classList.add('active');
             document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
             document.getElementById(`${tabId}-content`).classList.remove('hidden');
-
-             if (tabId === 'appraisal') {
+            if (tabId === 'appraisal') {
                 document.getElementById('appraisal-results-container').classList.add('hidden');
                 document.getElementById('purchase-section').classList.add('hidden');
             }
-            
-            if (tabId === 'inventory' && !document.getElementById('inventory-accordion-container').innerHTML.trim()) {
-                loadCombinedInventory();
-            } else if (tabId === 'history' && !document.getElementById('history-table-body').innerHTML.trim()) {
-                loadTransactionHistory();
-            }
+            if (tabId === 'inventory' && !document.getElementById('inventory-accordion-container').innerHTML.trim()) { loadCombinedInventory(); }
+            else if (tabId === 'history' && !document.getElementById('history-table-body').innerHTML.trim()) { loadTransactionHistory(); }
         }
 
-        // --- Populate Phone Models ---
+        // --- Populate Shared Dropdowns ---
         async function populatePhoneModels() {
             try {
                 const models = await apiFetch('/products');
-                const selects = [
-                    document.getElementById('appraisal-model'),
-                    document.getElementById('recommendation-model'),
-                    document.getElementById('history-model')
-                ];
-                
+                const selects = [document.getElementById('appraisal-model'), document.getElementById('recommendation-model'), document.getElementById('history-model')];
                 selects.forEach(select => {
                     if (select) {
                         const firstOption = select.options[0] ? select.options[0].outerHTML : '';
                         select.innerHTML = firstOption;
-                        models.forEach(model => {
-                            select.innerHTML += `<option>${model}</option>`;
-                        });
+                        models.forEach(model => { select.innerHTML += `<option>${model}</option>`; });
                     }
                 });
-
-            } catch (error) {
-                 console.error("Failed to populate phone models", error);
-                 document.getElementById('appraisal-model').innerHTML = '<option>Error loading</option>';
-            }
+            } catch (error) { console.error("Failed to populate phone models", error); }
         }
         
         async function populateStores() {
             try {
                 const stores = await apiFetch('/stores');
-                const selects = [
-                    document.getElementById('history-store'),
-                    document.getElementById('purchase-store')
-                ];
+                const selects = [document.getElementById('history-store'), document.getElementById('purchase-store')];
                 selects.forEach(select => {
                     if(select) {
                         const firstOption = select.options[0] ? select.options[0].outerHTML : '';
                         select.innerHTML = firstOption;
-                        stores.forEach(store => {
-                            select.innerHTML += `<option value="${store.store_id}">${store.store_name}</option>`;
-                        });
+                        stores.forEach(store => { select.innerHTML += `<option value="${store.store_id}">${store.store_name}</option>`; });
                     }
                 });
-            } catch (error) {
-                console.error("Failed to populate stores", error);
-                 document.getElementById('history-store').innerHTML = '<option>Error loading</option>';
-            }
+            } catch (error) { console.error("Failed to populate stores", error); }
         }
 
         // --- Appraisal & Purchase Logic ---
@@ -482,168 +412,83 @@
             const resultsContainer = document.getElementById('appraisal-results-container');
             const purchaseSection = document.getElementById('purchase-section');
             const resultsDiv = document.getElementById('appraisal-results');
-
-            if (!model) {
-                showModal({ title: 'Input Error', message: 'Please select a phone model to appraise.', cancelText: 'OK', iconType: 'warning' });
-                return;
-            }
-            
+            if (!model) { showModal({ title: 'Input Error', message: 'Please select a phone model to appraise.', cancelText: 'OK', iconType: 'warning' }); return; }
             showLoader('appraisal-loader');
             resultsContainer.classList.remove('hidden');
             purchaseSection.classList.add('hidden'); 
             resultsDiv.innerHTML = '';
-
             try {
-                const data = await apiFetch('/appraise/buy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model_name: model, grade: grade, desired_profit: desiredProfit })
-                });
-
-                currentPurchaseInfo = {
-                    model_name: data.model_appraised,
-                    grade: data.grade
-                };
-                
-                const velocityColor = data.predicted_sales_velocity === 'Fast Mover' ? 'text-green-600' : 
-                                    data.predicted_sales_velocity === 'Medium Mover' ? 'text-yellow-600' : 'text-red-600';
-                
-                let marketAlertHtml = '';
-                if (data.market_alert) {
-                    marketAlertHtml = `<div class="p-4 border-l-4 border-yellow-400 bg-yellow-50"><div class="flex"><div class="flex-shrink-0"><svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.257 3.099c.636-1.026 2.287-1.026 2.923 0l5.613 9.043c.642 1.033-.173 2.358-1.462 2.358H4.105c-1.289 0-2.104-1.325-1.462-2.358l5.614-9.043zM10 12a1 1 0 110-2 1 1 0 010 2zm-1-4a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clip-rule="evenodd" /></svg></div><div class="ml-3"><p class="text-sm text-yellow-700">Market Shift Alert: Your historical buy price for this model is higher than the current market can support for a profit. Proceed with caution.</p></div></div></div>`;
-                }
-
+                const data = await apiFetch('/appraise/buy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_name: model, grade: grade, desired_profit: desiredProfit }) });
+                currentPurchaseInfo = { model_name: data.model_appraised, grade: data.grade };
+                const velocityColor = data.predicted_sales_velocity === 'Fast Mover' ? 'text-green-600' : data.predicted_sales_velocity === 'Medium Mover' ? 'text-yellow-600' : 'text-red-600';
+                let marketAlertHtml = data.market_alert ? `<div class="p-4 border-l-4 border-yellow-400 bg-yellow-50"><div class="flex"><div class="flex-shrink-0"><svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.257 3.099c.636-1.026 2.287-1.026 2.923 0l5.613 9.043c.642 1.033-.173 2.358-1.462 2.358H4.105c-1.289 0-2.104-1.325-1.462-2.358l5.614-9.043zM10 12a1 1 0 110-2 1 1 0 010 2zm-1-4a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clip-rule="evenodd" /></svg></div><div class="ml-3"><p class="text-sm text-yellow-700">Market Shift Alert: Your historical buy price for this model is higher than the current market can support for a profit. Proceed with caution.</p></div></div></div>` : '';
                 resultsDiv.innerHTML = `<div class="space-y-6"><div><p class="text-sm text-gray-500">Model Appraised</p><p class="text-lg font-semibold">${data.model_appraised} (Grade: ${data.grade})</p></div>${marketAlertHtml}<div class="p-4 border-2 border-green-500 rounded-lg bg-green-50"><p class="text-sm font-medium text-green-800 text-center">Primary Recommendation: Target Buy Price</p><p class="text-center text-sm text-gray-600 mt-1">To make a <span class="font-bold">$${desiredProfit}</span> profit, you should offer:</p><p class="text-4xl font-bold text-center my-2 text-green-600">$${data.profit_targeted_buy_price_range.low.toFixed(2)} - $${data.profit_targeted_buy_price_range.high.toFixed(2)}</p><p class="text-xs text-center text-gray-500">(Median Target: $${data.profit_targeted_buy_price_range.median.toFixed(2)})</p></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t"><div class="p-3 border rounded-lg"><p class="text-sm font-medium text-gray-700">Historically-Based Buy Price</p><p class="text-sm text-gray-500 mb-1">(What you've paid in the past)</p><p class="text-lg font-semibold text-indigo-600">$${data.historically_based_buy_price.low.toFixed(2)} - $${data.historically_based_buy_price.high.toFixed(2)}</p><p class="text-sm text-gray-500">Median: $${data.historically_based_buy_price.median.toFixed(2)}</p></div><div class="p-3 border rounded-lg"><p class="text-sm font-medium text-gray-700">Predicted Sales Velocity</p><p class="text-lg font-semibold ${velocityColor}">${data.predicted_sales_velocity}</p><p class="text-xs text-gray-500 mt-1">${data.velocity_reason || ''}</p></div></div></div>`;
-                
-                // Show purchase section and pre-fill data
                 purchaseSection.classList.remove('hidden');
                 document.getElementById('purchase-summary').innerHTML = `You are about to purchase a <strong>Grade ${data.grade} ${data.model_appraised}</strong>.`;
                 document.getElementById('purchase-price').value = data.profit_targeted_buy_price_range.median.toFixed(2);
-                
-            } catch (error) {
-                 showModal({ title: 'Appraisal Failed', message: error.message, cancelText: 'OK', iconType: 'error' });
-            } finally {
-                hideLoader('appraisal-loader');
-            }
+            } catch (error) { showModal({ title: 'Appraisal Failed', message: error.message, cancelText: 'OK', iconType: 'error' }); } 
+            finally { hideLoader('appraisal-loader'); }
         });
         
         document.getElementById('purchase-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const storeId = document.getElementById('purchase-store').value;
             const price = document.getElementById('purchase-price').value;
-            
-            if (!storeId || !price) {
-                 showModal({ title: 'Input Error', message: 'Please select a Store and enter a Final Purchase Price.', cancelText: 'OK', iconType: 'warning' });
-                return;
-            }
-
+            if (!storeId || !price) { showModal({ title: 'Input Error', message: 'Please select a Store and enter a Final Purchase Price.', cancelText: 'OK', iconType: 'warning' }); return; }
             const storeName = document.getElementById('purchase-store').options[document.getElementById('purchase-store').selectedIndex].text;
-
             showModal({
-                title: 'Confirm Purchase',
-                message: `Are you sure you want to purchase a <strong>Grade ${currentPurchaseInfo.grade} ${currentPurchaseInfo.model_name}</strong> for <strong>$${price}</strong> at <strong>${storeName}</strong>?`,
-                confirmText: 'Yes, Purchase',
-                cancelText: 'Cancel',
-                iconType: 'warning',
+                title: 'Confirm Purchase', message: `Are you sure you want to purchase a <strong>Grade ${currentPurchaseInfo.grade} ${currentPurchaseInfo.model_name}</strong> for <strong>$${price}</strong> at <strong>${storeName}</strong>?`,
+                confirmText: 'Yes, Purchase', cancelText: 'Cancel', iconType: 'warning',
                 onConfirm: async () => {
                     try {
-                        const response = await apiFetch('/inventory/buy', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                ...currentPurchaseInfo,
-                                store_id: storeId,
-                                acquisition_price: price
-                            })
-                        });
-                        showModal({
-                            title: 'Purchase Successful!',
-                            message: `A new inventory unit has been created with Unit ID: <strong>${response.unit_id}</strong>`,
-                            cancelText: 'OK',
-                            iconType: 'success'
-                        });
-                        
-                        // Reset forms and hide results/purchase sections
-                        document.getElementById('appraisal-form').reset();
-                        document.getElementById('purchase-form').reset();
-                        document.getElementById('appraisal-results-container').classList.add('hidden');
-                        document.getElementById('purchase-section').classList.add('hidden');
-                         // Force a refresh of inventory data so the new item appears on next view
+                        const response = await apiFetch('/inventory/buy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...currentPurchaseInfo, store_id: storeId, acquisition_price: price }) });
+                        showModal({ title: 'Purchase Successful!', message: `A new inventory unit has been created with Unit ID: <strong>${response.unit_id}</strong>`, cancelText: 'OK', iconType: 'success' });
+                        document.getElementById('appraisal-form').reset(); document.getElementById('purchase-form').reset();
+                        document.getElementById('appraisal-results-container').classList.add('hidden'); document.getElementById('purchase-section').classList.add('hidden');
                         document.getElementById('inventory-accordion-container').innerHTML = '';
-                    } catch (error) {
-                        showModal({ title: 'Purchase Failed', message: error.message, cancelText: 'OK', iconType: 'error' });
-                    }
+                    } catch (error) { showModal({ title: 'Purchase Failed', message: error.message, cancelText: 'OK', iconType: 'error' }); }
                 }
             });
         });
-
 
         // --- Combined Inventory Logic ---
         async function loadCombinedInventory() {
             const accordionContainer = document.getElementById('inventory-accordion-container');
             showLoader('inventory-accordion-loader');
             accordionContainer.innerHTML = '';
-
-            const label_styles = {
-                'Fast Mover': 'bg-green-100 text-green-800',
-                'Medium Mover': 'bg-yellow-100 text-yellow-800',
-                'Dead Stock': 'bg-red-100 text-red-800',
-                'Discontinuation Alert': 'bg-orange-100 text-orange-800'
-            };
-
+            const label_styles = { 'Fast Mover': 'bg-green-100 text-green-800', 'Medium Mover': 'bg-yellow-100 text-yellow-800', 'Dead Stock': 'bg-red-100 text-red-800', 'Discontinuation Alert': 'bg-orange-100 text-orange-800' };
             try {
                 const data = await apiFetch('/inventory/combined');
-                
-                if (Object.keys(data).length === 0) {
-                    accordionContainer.innerHTML = '<p class="text-gray-500">No in-stock inventory found.</p>';
-                    return;
-                }
-
+                if (Object.keys(data).length === 0) { accordionContainer.innerHTML = '<p class="text-gray-500">No in-stock inventory found.</p>'; return; }
                 const sortedStoreNames = Object.keys(data).sort();
                 let accordionHtml = '';
                 for (const storeName of sortedStoreNames) {
-                    const storeData = data[storeName];
-                    const summary = storeData.summary;
-                    
-                    let phoneTableRows = '';
+                    const storeData = data[storeName]; const summary = storeData.summary; let phoneTableRows = '';
                     if (summary.phone_units > 0) {
                         storeData.phones.sort((a, b) => a.model_name.localeCompare(b.model_name));
                         storeData.phones.forEach(item => {
                             const labelClass = label_styles[item.velocity_label] || 'bg-gray-100 text-gray-800';
                             const label = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${labelClass}">${item.velocity_label}</span>`;
-                            phoneTableRows += `<tr class="inventory-table-row" data-item-type="phone" data-unit-id="${item.unit_id}"><td class="px-4 py-3 text-sm text-gray-600">${item.model_name}</td><td class="px-4 py-3 text-sm font-medium text-gray-900 text-center">${item.unit_id}</td><td class="px-4 py-3 text-sm text-gray-600 text-center">${item.grade}</td><td class="px-4 py-3 text-sm text-center">${label}</td></tr>`;
+                            phoneTableRows += `<tr class="inventory-table-row" data-item-type="phone" data-unit-id="${item.unit_id}" data-store-id="${item.store_id}" data-model-name="${item.model_name}"><td class="px-4 py-3 text-sm text-gray-600">${item.model_name}</td><td class="px-4 py-3 text-sm font-medium text-gray-900 text-center">${item.unit_id}</td><td class="px-4 py-3 text-sm text-gray-600 text-center">${item.grade}</td><td class="px-4 py-3 text-sm text-center">${label}</td></tr>`;
                         });
-                    } else {
-                        phoneTableRows = '<tr><td colspan="4" class="px-4 py-4 text-center text-sm text-gray-500">No phones in stock.</td></tr>';
-                    }
-
+                    } else { phoneTableRows = '<tr><td colspan="4" class="px-4 py-4 text-center text-sm text-gray-500">No phones in stock.</td></tr>'; }
                     let accessoryTableRows = '';
                     if (summary.accessory_types > 0) {
                         storeData.accessories.sort((a, b) => a.model_name.localeCompare(b.model_name));
                         storeData.accessories.forEach(item => {
                             let label = '';
-                            if (item.discontinuation_label) {
-                                const labelClass = label_styles[item.discontinuation_label];
-                                label = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${labelClass}">${item.discontinuation_label}</span>`;
-                            }
+                            if (item.discontinuation_label) { const labelClass = label_styles[item.discontinuation_label]; label = `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${labelClass}">${item.discontinuation_label}</span>`; }
                             accessoryTableRows += `<tr class="inventory-table-row" data-item-type="accessory" data-product-id="${item.product_id}"><td class="px-4 py-3 text-sm text-gray-600">${item.model_name}</td><td class="px-4 py-3 text-sm font-medium text-gray-900 text-center">${item.product_id}</td><td class="px-4 py-3 text-sm text-gray-600 text-center">${item.quantity}</td><td class="px-4 py-3 text-sm text-center">${label}</td></tr>`;
                         });
-                    } else {
-                        accessoryTableRows = '<tr><td colspan="4" class="px-4 py-4 text-center text-sm text-gray-500">No accessories in stock.</td></tr>';
-                    }
-
+                    } else { accessoryTableRows = '<tr><td colspan="4" class="px-4 py-4 text-center text-sm text-gray-500">No accessories in stock.</td></tr>'; }
                     accordionHtml += `<div><h3><button type="button" class="flex items-center justify-between w-full p-4 font-semibold text-left text-gray-800 bg-gray-50 border border-gray-200 hover:bg-gray-100 focus:outline-none" data-accordion-button><span>${storeName} (${summary.phone_units} Phones, ${summary.accessory_types} Accessories)</span><svg class="w-3 h-3 rotate-180 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5 5 1 1 5"/></svg></button></h3><div class="hidden border border-t-0 border-gray-200 p-4 space-y-4"><div><h4 class="text-md font-semibold text-gray-700 mb-2">Phone Units</h4><div class="max-h-64 overflow-y-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-100 sticky top-0"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Model</th><th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Unit ID</th><th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Grade</th><th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Velocity</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${phoneTableRows}</tbody></table></div></div><div><h4 class="text-md font-semibold text-gray-700 mb-2">Accessory Stock</h4><div class="max-h-64 overflow-y-auto"><table class="min-w-full divide-y divide-gray-200"><thead class="bg-gray-100 sticky top-0"><tr><th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Accessory Name</th><th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Product ID</th><th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Quantity</th><th class="px-4 py-2 text-center text-xs font-medium text-gray-500 uppercase">Status</th></tr></thead><tbody class="bg-white divide-y divide-gray-200">${accessoryTableRows}</tbody></table></div></div></div></div>`;
                 }
                 accordionContainer.innerHTML = accordionHtml;
-
-            } catch (error) {
-                accordionContainer.innerHTML = `<p class="text-red-500">Error loading inventory: ${error.message}</p>`;
-            } finally {
-                hideLoader('inventory-accordion-loader');
-            }
+            } catch (error) { accordionContainer.innerHTML = `<p class="text-red-500">Error loading inventory: ${error.message}</p>`; } 
+            finally { hideLoader('inventory-accordion-loader'); }
         }
 
-        async function getPhonePriceDetails(unitId) {
+        async function getPhonePriceDetails(unitId, storeId, modelName) {
             const placeholder = document.getElementById('inventory-results-placeholder');
             const phoneView = document.getElementById('phone-details-view');
             const accessoryView = document.getElementById('accessory-details-view');
@@ -652,16 +497,84 @@
             placeholder.classList.add('hidden');
             phoneView.classList.add('hidden');
             accessoryView.classList.add('hidden');
+            resetCart();
 
             try {
-                const data = await apiFetch('/inventory/price', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ unit_id: parseInt(unitId) })
-                });
+                const priceDataPromise = apiFetch('/inventory/price', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unit_id: parseInt(unitId) }) });
+                const recommendationsPromise = apiFetch('/recommend/accessories/instock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone_model_name: modelName, store_id: storeId }) });
+                const otherAccessoriesPromise = apiFetch(`/inventory/accessories/${storeId}`);
+                const [data, recommendations, otherAccessories] = await Promise.all([priceDataPromise, recommendationsPromise, otherAccessoriesPromise]);
                 
-                phoneView.innerHTML = `<div class="grid grid-cols-2 gap-4"><div><p class="text-sm text-gray-500">Unit ID / Model</p><p class="text-lg font-semibold">${data.unit_id} / ${data.model_name}</p></div><div><p class="text-sm text-gray-500">Days in Inventory</p><p class="text-lg font-semibold">${data.days_in_inventory} days</p></div><div><p class="text-sm text-gray-500">Acquisition Date</p><p class="text-lg font-semibold">${data.acquisition_date}</p></div><div><p class="text-sm text-gray-500">Acquisition Price</p><p class="text-lg font-semibold">$${data.acquisition_price ? data.acquisition_price.toFixed(2) : 'N/A'}</p></div></div><div class="pt-4 border-t mt-4"><p class="text-sm text-gray-500">Recommended Selling Price Range</p><p class="text-lg font-semibold text-indigo-600">$${data.predicted_selling_price_range.low_liquidate_price.toFixed(2)} - $${data.predicted_selling_price_range.high_start_price.toFixed(2)}</p><p class="text-sm text-gray-500">(Fair Market: $${data.predicted_selling_price_range.median_fair_market_price.toFixed(2)})</p></div>`;
+                let recHtml = '<p class="text-sm text-gray-500">No in-stock recommendations.</p>';
+                if (recommendations.length > 0) {
+                    recHtml = recommendations.map(rec => `
+                        <div class="flex items-center justify-between p-2 border rounded-md">
+                            <div>
+                                <p class="text-sm font-medium">${rec.model_name}</p>
+                                <p class="text-xs text-gray-500">MSRP: $${(rec.original_msrp || 0).toFixed(2)}</p>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <input type="number" value="1" min="1" class="w-16 text-center rounded-md border-gray-300 shadow-sm sm:text-sm" id="rec-qty-${rec.product_id}">
+                                <button data-add-rec-to-cart data-product-id="${rec.product_id}" data-name="${rec.model_name}" data-price="${rec.original_msrp}" class="p-1.5 bg-indigo-100 text-indigo-700 rounded-md hover:bg-indigo-200">
+                                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                                </button>
+                            </div>
+                        </div>`).join('');
+                }
+
+                let otherAccOptions = otherAccessories.map(acc => `<option value="${acc.product_id}" data-price="${acc.price}" data-name="${acc.model_name}">${acc.model_name}</option>`).join('');
+
+                phoneView.innerHTML = `
+                    <div id="phone-static-details" class="p-4 bg-gray-50 rounded-lg">
+                         <div class="grid grid-cols-2 gap-4">
+                            <div><p class="text-sm text-gray-500">Unit ID / Model</p><p class="text-lg font-semibold">${data.unit_id} / ${data.model_name}</p></div>
+                            <div><p class="text-sm text-gray-500">Days in Inventory</p><p class="text-lg font-semibold">${data.days_in_inventory} days</p></div>
+                            <div><p class="text-sm text-gray-500">Acquisition Date</p><p class="text-lg font-semibold">${data.acquisition_date}</p></div>
+                            <div><p class="text-sm text-gray-500">Acquisition Price</p><p class="text-lg font-semibold">$${data.acquisition_price ? data.acquisition_price.toFixed(2) : 'N/A'}</p></div>
+                        </div>
+                        <div class="pt-4 border-t mt-4"><p class="text-sm text-gray-500">Recommended Selling Price Range</p><p class="text-lg font-semibold text-indigo-600">$${data.predicted_selling_price_range.low_liquidate_price.toFixed(2)} - $${data.predicted_selling_price_range.high_start_price.toFixed(2)}</p><p class="text-sm text-gray-500">(Fair Market: $${data.predicted_selling_price_range.median_fair_market_price.toFixed(2)})</p></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t">
+                        <div id="sell-panel" class="space-y-4">
+                            <div class="p-4 border rounded-xl space-y-3 bg-white">
+                                <h3 class="font-semibold text-lg">${data.model_name}</h3>
+                                <div>
+                                    <label for="final-sale-price" class="block text-sm font-medium text-gray-700">Final Sale Price ($)</label>
+                                    <input type="number" step="0.01" id="final-sale-price" value="${data.predicted_selling_price_range.median_fair_market_price.toFixed(2)}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                </div>
+                                <button id="add-phone-to-cart-btn" data-unit-id="${data.unit_id}" data-name="${data.model_name}" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">Add Phone to Cart</button>
+                            </div>
+                            <div class="p-4 border rounded-xl space-y-2 bg-white">
+                                <h4 class="font-semibold">Add Recommended Accessories</h4>
+                                <div id="recommended-accessories-list" class="space-y-2">${recHtml}</div>
+                            </div>
+                        </div>
+                        <div id="cart-panel" class="p-4 border rounded-xl bg-white flex flex-col">
+                           <div class="flex justify-between items-center mb-2">
+                                <h3 class="font-semibold text-lg">Cart</h3>
+                                <button id="reset-cart-btn" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold">Reset Cart</button>
+                           </div>
+                           <div id="cart-items" class="flex-grow space-y-2 mb-4 min-h-[150px]"><p class="text-sm text-gray-400 text-center pt-8">Cart is empty</p></div>
+                           <div class="space-y-3 pt-4 border-t">
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700">Add Other Accessory</label>
+                                    <div class="flex items-center space-x-2 mt-1">
+                                        <select id="other-accessory-select" class="block w-full rounded-md border-gray-300 shadow-sm sm:text-sm"><option value="">Select...</option>${otherAccOptions}</select>
+                                        <button id="add-other-accessory-btn" class="p-2 bg-gray-200 rounded-md hover:bg-gray-300 flex-shrink-0">Add</button>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-sm text-gray-500">Total</p>
+                                    <p id="cart-total" class="text-2xl font-bold">$0.00</p>
+                                </div>
+                                <button id="checkout-btn" class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 disabled:bg-gray-400" disabled>Checkout</button>
+                           </div>
+                        </div>
+                    </div>
+                `;
                 phoneView.classList.remove('hidden');
+                cart.storeId = storeId;
+                addSalePanelEventListeners();
             } catch (error) {
                 phoneView.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
                 phoneView.classList.remove('hidden');
@@ -669,68 +582,205 @@
                 hideLoader('inventory-loader');
             }
         }
+        
+        // --- Cart & Sale Logic ---
+        function addSalePanelEventListeners() {
+            document.getElementById('add-phone-to-cart-btn')?.addEventListener('click', addPhoneToCart);
+            document.getElementById('recommended-accessories-list')?.addEventListener('click', (e) => {
+                const button = e.target.closest('[data-add-rec-to-cart]');
+                if (button) { addAccessoryToCart(button); }
+            });
+            document.getElementById('add-other-accessory-btn')?.addEventListener('click', addOtherAccessoryToCart);
+            document.getElementById('checkout-btn')?.addEventListener('click', handleCheckout);
+            // ADDED: Listeners for the new buttons
+            document.getElementById('reset-cart-btn')?.addEventListener('click', resetCart);
+            document.getElementById('cart-items')?.addEventListener('click', (e) => {
+                const button = e.target.closest('[data-cart-action]');
+                if (button) {
+                    const productId = button.dataset.productId;
+                    const action = button.dataset.cartAction;
+                    updateCartQuantity(productId, action);
+                }
+            });
+        }
+
+        // UPDATED: Now re-enables the phone button
+        function resetCart() {
+            cart = { phone: null, accessories: [], storeId: cart.storeId };
+            const addPhoneBtn = document.getElementById('add-phone-to-cart-btn');
+            if (addPhoneBtn) {
+                addPhoneBtn.disabled = false;
+                addPhoneBtn.textContent = 'Add Phone to Cart';
+                addPhoneBtn.classList.replace('bg-gray-500', 'bg-blue-600');
+            }
+            renderCart();
+        }
+
+        function addPhoneToCart(e) {
+            const price = parseFloat(document.getElementById('final-sale-price').value);
+            if (isNaN(price) || price <= 0) {
+                showModal({title: "Invalid Price", message: "Please enter a valid sale price for the phone.", iconType: 'warning', cancelText: 'OK'});
+                return;
+            }
+            cart.phone = {
+                unit_id: e.target.dataset.unitId,
+                name: e.target.dataset.name,
+                price: price
+            };
+            e.target.disabled = true;
+            e.target.textContent = 'Phone Added to Cart';
+            e.target.classList.replace('bg-blue-600', 'bg-gray-500');
+            renderCart();
+        }
+        
+        function addAccessoryToCart(button) {
+            const productId = button.dataset.productId;
+            const name = button.dataset.name;
+            const price = parseFloat(button.dataset.price);
+            const quantity = parseInt(document.getElementById(`rec-qty-${productId}`).value);
+
+            if (isNaN(quantity) || quantity < 1) { 
+                 showModal({title: "Invalid Quantity", message: "Please enter a valid quantity.", iconType: 'warning', cancelText: 'OK'});
+                 return; 
+            }
+            updateCartQuantity(productId, 'increase', quantity, name, price);
+        }
+
+        function addOtherAccessoryToCart() {
+            const select = document.getElementById('other-accessory-select');
+            const selectedOption = select.options[select.selectedIndex];
+            if (!selectedOption || !selectedOption.value) return;
+
+            const productId = selectedOption.value;
+            const name = selectedOption.dataset.name;
+            const price = parseFloat(selectedOption.dataset.price);
+            updateCartQuantity(productId, 'increase', 1, name, price);
+            select.selectedIndex = 0;
+        }
+        
+        // NEW: Handles all quantity updates and item additions
+        function updateCartQuantity(productId, action, amount = 1, name = '', price = 0) {
+            const accessoryIndex = cart.accessories.findIndex(a => a.product_id === productId);
+
+            if (accessoryIndex > -1) {
+                if (action === 'increase') {
+                    cart.accessories[accessoryIndex].quantity += amount;
+                } else if (action === 'decrease') {
+                    cart.accessories[accessoryIndex].quantity -= amount;
+                    if (cart.accessories[accessoryIndex].quantity <= 0) {
+                        cart.accessories.splice(accessoryIndex, 1);
+                    }
+                }
+            } else if (action === 'increase') {
+                cart.accessories.push({ product_id: productId, name, price, quantity: amount });
+            }
+            renderCart();
+        }
+
+        // UPDATED: Renders the new cart item layout
+        function renderCart() {
+            const itemsDiv = document.getElementById('cart-items');
+            const totalP = document.getElementById('cart-total');
+            const checkoutBtn = document.getElementById('checkout-btn');
+            
+            if (!itemsDiv) return;
+            itemsDiv.innerHTML = '';
+            let total = 0;
+
+            if (cart.phone) {
+                itemsDiv.innerHTML += `<div class="flex justify-between text-sm p-2 bg-indigo-50 rounded-md"><p class="font-semibold">${cart.phone.name}</p><p class="font-semibold">$${cart.phone.price.toFixed(2)}</p></div>`;
+                total += cart.phone.price;
+            }
+            cart.accessories.forEach(acc => {
+                const subtotal = acc.price * acc.quantity;
+                itemsDiv.innerHTML += `
+                <div class="flex justify-between items-center text-sm p-2 border-b">
+                    <div>
+                        <p>${acc.name}</p>
+                        <p class="text-xs text-gray-500">$${acc.price.toFixed(2)} each</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button data-cart-action="decrease" data-product-id="${acc.product_id}" class="p-1 rounded-full bg-gray-200 hover:bg-gray-300">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+                        </button>
+                        <span class="w-6 text-center font-medium">${acc.quantity}</span>
+                        <button data-cart-action="increase" data-product-id="${acc.product_id}" class="p-1 rounded-full bg-gray-200 hover:bg-gray-300">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        </button>
+                        <span class="w-14 text-right font-semibold">$${subtotal.toFixed(2)}</span>
+                    </div>
+                </div>`;
+                total += subtotal;
+            });
+
+            if (!cart.phone && cart.accessories.length === 0) {
+                itemsDiv.innerHTML = '<p class="text-sm text-gray-400 text-center pt-8">Cart is empty</p>';
+            } 
+            checkoutBtn.disabled = !cart.phone;
+            totalP.textContent = `$${total.toFixed(2)}`;
+        }
+
+        async function handleCheckout() {
+            if (!cart.phone) {
+                showModal({title: "Cannot Checkout", message: "You must add the phone to the cart before checking out.", iconType: 'warning', cancelText: 'OK'});
+                return;
+            }
+            try {
+                const response = await apiFetch('/checkout', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(cart)
+                });
+                 showModal({
+                    title: 'Checkout Successful!',
+                    message: `Sale completed with Transaction ID: <strong>${response.transaction_id}</strong>.`,
+                    cancelText: 'OK',
+                    iconType: 'success'
+                });
+                document.getElementById('phone-details-view').classList.add('hidden');
+                document.getElementById('inventory-results-placeholder').classList.remove('hidden');
+                resetCart();
+                loadCombinedInventory();
+                document.getElementById('history-table-body').innerHTML = '';
+            } catch (error) {
+                showModal({ title: 'Checkout Failed', message: error.message, cancelText: 'OK', iconType: 'error' });
+            }
+        }
 
         async function getAccessoryDetails(productId) {
             const placeholder = document.getElementById('inventory-results-placeholder');
             const phoneView = document.getElementById('phone-details-view');
             const accessoryView = document.getElementById('accessory-details-view');
-            
             showLoader('inventory-loader');
-            placeholder.classList.add('hidden');
-            phoneView.classList.add('hidden');
-            accessoryView.classList.add('hidden');
-
+            placeholder.classList.add('hidden'); phoneView.classList.add('hidden'); accessoryView.classList.add('hidden');
             try {
                 const data = await apiFetch(`/accessories/details/${productId}`);
-                let compatHtml = data.compatible_phones.map(p => `<span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2 mb-2">${p}</span>`).join('');
-                if (!compatHtml) {
-                    compatHtml = '<p class="text-sm text-gray-500">No specific compatible phones listed.</p>';
-                }
-
+                let compatHtml = data.compatible_phones.map(p => `<span class="inline-block bg-gray-200 rounded-full px-3 py-1 text-sm font-semibold text-gray-700 mr-2 mb-2">${p}</span>`).join('') || '<p class="text-sm text-gray-500">No specific compatible phones listed.</p>';
                 accessoryView.innerHTML = `<div><p class="text-sm text-gray-500">Accessory Name / ID</p><p class="text-lg font-semibold">${data.model_name} / ${data.product_id}</p></div><div><p class="text-sm text-gray-500">MSRP / Cost</p><p class="text-lg font-semibold">$${data.original_msrp ? data.original_msrp.toFixed(2) : 'N/A'}</p></div><div class="pt-4 border-t mt-4"><p class="text-sm font-medium text-gray-700 mb-2">Compatible Phone Models</p><div>${compatHtml}</div></div>`;
                 accessoryView.classList.remove('hidden');
             } catch (error) {
                 accessoryView.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
                 accessoryView.classList.remove('hidden');
-            } finally {
-                hideLoader('inventory-loader');
-            }
+            } finally { hideLoader('inventory-loader'); }
         }
 
         // --- Transaction History Logic ---
-        document.getElementById('history-filter-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            loadTransactionHistory();
-        });
-
+        document.getElementById('history-filter-form').addEventListener('submit', async (e) => { e.preventDefault(); loadTransactionHistory(); });
         async function loadTransactionHistory() {
             showLoader('history-loader');
             document.getElementById('history-results-area').classList.add('hidden');
             const tableBody = document.getElementById('history-table-body');
             tableBody.innerHTML = '';
-            
-            const params = new URLSearchParams({
-                model_name: document.getElementById('history-model').value,
-                grade: document.getElementById('history-grade').value,
-                store_id: document.getElementById('history-store').value,
-                start_date: document.getElementById('history-start-date').value,
-                end_date: document.getElementById('history-end-date').value,
-            });
-
-            for(let [key, val] of params.entries()) {
-                if (!val) { params.delete(key); }
-            }
-            
+            const params = new URLSearchParams({ model_name: document.getElementById('history-model').value, grade: document.getElementById('history-grade').value, store_id: document.getElementById('history-store').value, start_date: document.getElementById('history-start-date').value, end_date: document.getElementById('history-end-date').value });
+            for(let [key, val] of params.entries()) { if (!val) { params.delete(key); } }
             try {
                 const data = await apiFetch(`/transactions/history?${params.toString()}`);
-                
                 const summary = data.summary;
                 document.getElementById('summary-revenue').textContent = summary.total_revenue ? `$${summary.total_revenue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '$0.00';
                 document.getElementById('summary-cost').textContent = summary.total_cost ? `$${summary.total_cost.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '$0.00';
                 document.getElementById('summary-profit').textContent = summary.total_profit ? `$${summary.total_profit.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}` : '$0.00';
                 document.getElementById('summary-items').textContent = summary.total_items_sold || 0;
                 document.getElementById('summary-avg-days').textContent = summary.average_days_in_stock ? `${summary.average_days_in_stock.toFixed(1)} (Phones)` : 'N/A';
-
                 let tableHtml = '';
                 if(data.transactions && data.transactions.length > 0) {
                      data.transactions.forEach(tx => {
@@ -738,53 +788,22 @@
                         const profitColor = profit >= 0 ? 'text-green-600' : 'text-red-600';
                         tableHtml += `<tr><td class="px-4 py-3 text-sm font-medium text-gray-800">${tx.transaction_id}</td><td class="px-4 py-3 text-sm">${tx.transaction_date}</td><td class="px-4 py-3 text-sm">${tx.model_name}</td><td class="px-4 py-3 text-sm text-center">${tx.grade ? tx.grade : 'N/A'}</td><td class="px-4 py-3 text-sm text-right">$${(tx.final_sale_price || 0).toFixed(2)}</td><td class="px-4 py-3 text-sm text-right font-medium ${profitColor}">$${profit.toFixed(2)}</td></tr>`;
                     });
-                } else {
-                    tableHtml = '<tr><td colspan="6" class="text-center py-8 text-gray-500">No transactions match the current filters.</td></tr>';
-                }
+                } else { tableHtml = '<tr><td colspan="6" class="text-center py-8 text-gray-500">No transactions match the current filters.</td></tr>'; }
                 tableBody.innerHTML = tableHtml;
-
                 renderHistoryChart(data.transactions);
-
                 document.getElementById('history-results-area').classList.remove('hidden');
-            } catch (error) {
-                tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-500">Error loading data: ${error.message}</td></tr>`;
-            } finally {
-                hideLoader('history-loader');
-            }
+            } catch (error) { tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-red-500">Error loading data: ${error.message}</td></tr>`; } 
+            finally { hideLoader('history-loader'); }
         }
         
         function renderHistoryChart(transactions) {
             const monthlyProfit = {};
-            if(transactions) {
-                 transactions.forEach(tx => {
-                    if (tx.profit_loss === null) return;
-                    const month = tx.transaction_date.substring(0, 7);
-                    if (!monthlyProfit[month]) { monthlyProfit[month] = 0; }
-                    monthlyProfit[month] += tx.profit_loss;
-                });
-            }
-
+            if(transactions) { transactions.forEach(tx => { if (tx.profit_loss === null) return; const month = tx.transaction_date.substring(0, 7); if (!monthlyProfit[month]) { monthlyProfit[month] = 0; } monthlyProfit[month] += tx.profit_loss; }); }
             const sortedMonths = Object.keys(monthlyProfit).sort();
-            const chartLabels = sortedMonths;
-            const chartData = sortedMonths.map(month => monthlyProfit[month]);
-
+            const chartLabels = sortedMonths; const chartData = sortedMonths.map(month => monthlyProfit[month]);
             if (historyChartInstance) { historyChartInstance.destroy(); }
-            
             const ctx = document.getElementById('history-chart').getContext('2d');
-            historyChartInstance = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: chartLabels,
-                    datasets: [{
-                        label: 'Total Profit',
-                        data: chartData,
-                        backgroundColor: chartData.map(v => v >= 0 ? 'rgba(22, 163, 74, 0.6)' : 'rgba(220, 38, 38, 0.6)'),
-                        borderColor: chartData.map(v => v >= 0 ? 'rgb(22, 163, 74)' : 'rgb(220, 38, 38)'),
-                        borderWidth: 1
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: value => '$' + value } }, }, plugins: { legend: { display: false } } }
-            });
+            historyChartInstance = new Chart(ctx, { type: 'bar', data: { labels: chartLabels, datasets: [{ label: 'Total Profit', data: chartData, backgroundColor: chartData.map(v => v >= 0 ? 'rgba(22, 163, 74, 0.6)' : 'rgba(220, 38, 38, 0.6)'), borderColor: chartData.map(v => v >= 0 ? 'rgb(22, 163, 74)' : 'rgb(220, 38, 38)'), borderWidth: 1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: value => '$' + value } }, }, plugins: { legend: { display: false } } } });
         }
 
         // --- Recommendation Logic ---
@@ -794,32 +813,14 @@
             if (!modelName) { alert('Please select a Phone Model.'); return; }
             const resultsContainer = document.getElementById('recommendation-results-container');
             const resultsDiv = document.getElementById('recommendation-results');
-            
             showLoader('recommendation-loader');
-            resultsContainer.classList.remove('hidden');
-            resultsDiv.innerHTML = '';
-
+            resultsContainer.classList.remove('hidden'); resultsDiv.innerHTML = '';
             try {
-                const data = await apiFetch('/recommend/accessories', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone_model_name: modelName })
-                });
-
-                if (data.length === 0) {
-                     resultsDiv.innerHTML = `<p class="text-gray-500">No recommendations available for this product.</p>`;
-                } else {
-                    let content = '';
-                    data.forEach(item => {
-                        content += `<div class="p-3 border rounded-lg"><p class="font-semibold">${item.model_name}</p><p class="text-sm text-gray-500">Product ID: ${item.product_id} | MSRP: $${item.original_msrp ? item.original_msrp.toFixed(2) : 'N/A'}</p></div>`;
-                    });
-                    resultsDiv.innerHTML = content;
-                }
-            } catch (error) {
-                resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
-            } finally {
-                hideLoader('recommendation-loader');
-            }
+                const data = await apiFetch('/recommend/accessories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone_model_name: modelName }) });
+                if (data.length === 0) { resultsDiv.innerHTML = `<p class="text-gray-500">No recommendations available for this product.</p>`; } 
+                else { let content = ''; data.forEach(item => { content += `<div class="p-3 border rounded-lg"><p class="font-semibold">${item.model_name}</p><p class="text-sm text-gray-500">Product ID: ${item.product_id} | MSRP: $${item.original_msrp ? item.original_msrp.toFixed(2) : 'N/A'}</p></div>`; }); resultsDiv.innerHTML = content; }
+            } catch (error) { resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`; } 
+            finally { hideLoader('recommendation-loader'); }
         });
 
         // --- Discontinuation Logic ---
@@ -827,38 +828,22 @@
             const listContainer = document.getElementById('discontinuation-list');
             const loader = document.getElementById('discontinuation-loader');
             const tableContainer = document.getElementById('discontinuation-table-container');
-
             showLoader('discontinuation-loader');
             tableContainer.classList.add('hidden');
-
             try {
                 const data = await apiFetch('/inventory/discontinuation_alerts');
                 listContainer.innerHTML = '';
-                if (data.length === 0) {
-                    listContainer.innerHTML = '<tr><td colspan="3" class="text-center py-4">No discontinuation alerts at this time.</td></tr>';
-                } else {
-                    data.forEach(item => {
-                        listContainer.innerHTML += `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.product_id}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.model_name}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.compatible_phone_sales_past_180_days}</td></tr>`;
-                    });
-                }
+                if (data.length === 0) { listContainer.innerHTML = '<tr><td colspan="3" class="text-center py-4">No discontinuation alerts at this time.</td></tr>'; } 
+                else { data.forEach(item => { listContainer.innerHTML += `<tr><td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.product_id}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.model_name}</td><td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.compatible_phone_sales_past_180_days}</td></tr>`; }); }
                 tableContainer.classList.remove('hidden');
-            } catch (error) {
-                listContainer.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-red-500">Error loading data: ${error.message}</td></tr>`;
-            } finally {
-                hideLoader('discontinuation-loader');
-            }
+            } catch (error) { listContainer.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-red-500">Error loading data: ${error.message}</td></tr>`; } 
+            finally { hideLoader('discontinuation-loader'); }
         }
 
-
-        // --- Initial Load ---
+        // --- Initial Load & Event Listeners ---
         document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.loader').forEach(l => l.parentElement.classList.add('hidden'));
-
-            populatePhoneModels();
-            populateStores();
-            loadDiscontinuationList();
-            updateClock();
-            setInterval(updateClock, 1000);
+            populatePhoneModels(); populateStores(); loadDiscontinuationList();
+            updateClock(); setInterval(updateClock, 1000);
             
             const accordionContainer = document.getElementById('inventory-accordion-container');
             if(accordionContainer) {
@@ -867,22 +852,16 @@
                     if (button) {
                         const body = button.parentElement.nextElementSibling;
                         const icon = button.querySelector('svg');
-                        body.classList.toggle('hidden');
-                        icon.classList.toggle('rotate-180');
+                        body.classList.toggle('hidden'); icon.classList.toggle('rotate-180');
                         return;
                     }
-
                     const row = e.target.closest('.inventory-table-row');
                     if (row) {
                         accordionContainer.querySelectorAll('.inventory-table-row').forEach(r => r.classList.remove('selected'));
                         row.classList.add('selected');
-
                         const itemType = row.dataset.itemType;
-                        if (itemType === 'phone') {
-                            getPhonePriceDetails(row.dataset.unitId);
-                        } else if (itemType === 'accessory') {
-                            getAccessoryDetails(row.dataset.productId);
-                        }
+                        if (itemType === 'phone') { getPhonePriceDetails(row.dataset.unitId, row.dataset.storeId, row.dataset.modelName); } 
+                        else if (itemType === 'accessory') { getAccessoryDetails(row.dataset.productId); }
                     }
                 });
             }

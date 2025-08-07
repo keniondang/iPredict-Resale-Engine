@@ -421,18 +421,21 @@ def buy_inventory():
 
 
 @app.route('/api/inventory/combined', methods=['GET'])
+@app.route('/api/inventory/combined', methods=['GET'])
 def get_combined_inventory():
     """ Endpoint to fetch and enrich both phone and accessory inventory. """
     try:
+        # UPDATED: Added i.store_id to the phone query
         phone_query = text("""
-            SELECT i.unit_id, i.grade, i.acquisition_date, p.model_name, s.store_name
+            SELECT i.unit_id, i.grade, i.acquisition_date, p.model_name, s.store_name, i.store_id
             FROM inventory_units i
             JOIN products p ON i.product_id = p.product_id
             JOIN stores s ON i.store_id = s.store_id
             WHERE i.status = 'In Stock'
         """)
+        # UPDATED: Added ai.store_id to the accessory query
         accessory_query = text("""
-            SELECT ai.product_id, ai.quantity, p.model_name, s.store_name
+            SELECT ai.product_id, ai.quantity, p.model_name, s.store_name, ai.store_id
             FROM accessory_inventory ai
             JOIN products p ON ai.product_id = p.product_id
             JOIN stores s ON ai.store_id = s.store_id
@@ -445,7 +448,6 @@ def get_combined_inventory():
             
         phones_df['acquisition_date'] = pd.to_datetime(phones_df['acquisition_date']).dt.strftime('%Y-%m-%d')
         
-        # FIX: Filter out the 'Online Store' before initializing the response data
         stores_to_display = stores_df_global[stores_df_global['store_name'] != 'Online Store']
         
         response_data = {store_name: {
@@ -455,13 +457,11 @@ def get_combined_inventory():
         } for store_name in stores_to_display['store_name'].unique()}
 
         if not phones_df.empty:
-            # Enrich phones with velocity predictions
             phones_list = phones_df.to_dict('records')
             for phone in phones_list:
                 prediction = velocity_predictor.predict(phone['model_name'], phone['grade'])
                 phone['velocity_label'] = prediction.get('predicted_sales_velocity', 'Unknown')
             
-            # Group phones by store
             phones_df_enriched = pd.DataFrame(phones_list)
             grouped_phones = phones_df_enriched.groupby('store_name')
             for store_name, group_df in grouped_phones:
@@ -470,16 +470,13 @@ def get_combined_inventory():
                     response_data[store_name]['summary']['phone_units'] = len(group_df)
 
         if not accessories_df.empty:
-            # Enrich accessories with discontinuation alerts
             accessories_list = accessories_df.to_dict('records')
             for acc in accessories_list:
                 if acc['product_id'] in discontinuation_id_set:
                     acc['discontinuation_label'] = 'Discontinuation Alert'
             
-            # Group accessories by store
             accessories_df_enriched = pd.DataFrame(accessories_list)
             
-            # Replace NaN values with None to ensure valid JSON serialization
             accessories_df_enriched.replace({np.nan: None}, inplace=True)
             
             grouped_accessories = accessories_df_enriched.groupby('store_name')
@@ -493,6 +490,7 @@ def get_combined_inventory():
     except Exception as e:
         print(f"Error in /api/inventory/combined: {e}")
         return jsonify({"error": "Could not load combined inventory"}), 500
+    
 
 @app.route('/api/inventory/price', methods=['POST'])
 def predict_dynamic_sell_price():
@@ -700,6 +698,135 @@ def get_product_demand_forecast():
         return jsonify(response_data)
     except Exception as e:
         return jsonify({"error": f"Failed to generate forecast: {e}"}), 500
+
+# ADD THE FOLLOWING THREE FUNCTIONS TO app.py
+
+@app.route('/api/recommend/accessories/instock', methods=['POST'])
+def get_instock_accessory_recommendations():
+    """Gets top accessory recommendations that are verified to be in stock."""
+    if not recommender:
+        return jsonify({"error": "Recommender system not loaded"}), 500
+        
+    data = request.get_json()
+    phone_model_name = data.get('phone_model_name')
+    store_id = data.get('store_id')
+
+    if not phone_model_name or not store_id:
+        return jsonify({"error": "phone_model_name and store_id are required"}), 400
+
+    try:
+        recommended_ids = recommender.recommend_accessories(phone_model_name=phone_model_name, top_n=5)
+        if not recommended_ids:
+            return jsonify([])
+        
+        # --- START OF DEFINITIVE FIX ---
+
+        # Create named placeholders for the IN clause, e.g., ":p0, :p1, :p2"
+        # This is the most reliable method for parameterizing IN clauses
+        placeholders = ", ".join(f":p{i}" for i in range(len(recommended_ids)))
+        
+        # Dynamically build the final SQL query string with named placeholders
+        instock_query_sql = f"SELECT product_id FROM accessory_inventory WHERE store_id = :sid AND quantity > 0 AND product_id IN ({placeholders})"
+        
+        # Build the corresponding dictionary of parameters
+        params_dict = {"sid": int(store_id)}
+        for i, pid in enumerate(recommended_ids):
+            params_dict[f"p{i}"] = pid
+
+        # Execute the query with the dictionary of parameters
+        with db_engine.connect() as connection:
+            instock_result = connection.execute(text(instock_query_sql), params_dict).fetchall()
+        
+        # --- END OF DEFINITIVE FIX ---
+
+        instock_ids = {row[0] for row in instock_result}
+
+        final_recommendations = [pid for pid in recommended_ids if pid in instock_ids][:3]
+        if not final_recommendations:
+            return jsonify([])
+
+        recommended_products = products_df_global[products_df_global['product_id'].isin(final_recommendations)]
+        # Preserve the recommendation order
+        if not recommended_products.empty:
+            recommended_products = recommended_products.set_index('product_id').loc[final_recommendations].reset_index()
+        
+        recommended_products.replace({np.nan: None}, inplace=True)
+        
+        return jsonify(recommended_products.to_dict('records'))
+    except Exception as e:
+        # Pass the original database error to the frontend for clearer debugging
+        return jsonify({"error": f"Could not generate in-stock recommendations: {e}"}), 500
+
+@app.route('/api/inventory/accessories/<int:store_id>', methods=['GET'])
+def get_all_store_accessories(store_id):
+    """Gets a list of all available (quantity > 0) accessories for a specific store."""
+    try:
+        query = text("""
+            SELECT p.product_id, p.model_name, p.original_msrp
+            FROM accessory_inventory ai
+            JOIN products p ON ai.product_id = p.product_id
+            WHERE ai.store_id = :sid AND ai.quantity > 0
+            ORDER BY p.model_name;
+        """)
+        with db_engine.connect() as connection:
+            results = connection.execute(query, {"sid": store_id}).fetchall()
+        
+        accessories = [{"product_id": row[0], "model_name": row[1], "price": row[2]} for row in results]
+        return jsonify(accessories)
+    except Exception as e:
+        print(f"Error getting accessories for store {store_id}: {e}")
+        return jsonify({"error": f"Could not retrieve accessories for store: {e}"}), 500
+
+@app.route('/api/checkout', methods=['POST'])
+@app.route('/api/checkout', methods=['POST'])
+def process_checkout():
+    data = request.get_json()
+    cart_phone = data.get('phone')
+    cart_accessories = data.get('accessories', [])
+    store_id = data.get('storeId')
+
+    if not cart_phone or not store_id:
+        return jsonify({"error": "A phone and store ID are required for checkout."}), 400
+
+    with db_engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            # 1. Get new Transaction ID
+            max_txn_id_result = connection.execute(text("SELECT MAX(transaction_id) FROM transactions")).scalar()
+            new_txn_id = (max_txn_id_result or 0) + 1
+            
+            # --- FIX: Changed format to store only the date (YYYY-MM-DD) ---
+            txn_date = datetime.now().strftime('%Y-%m-%d')
+
+            # 2. Process Phone Sale
+            phone_product_id = connection.execute(text("SELECT product_id FROM inventory_units WHERE unit_id = :uid"), {"uid": cart_phone['unit_id']}).scalar()
+            
+            # Insert phone transaction
+            phone_txn_sql = text("INSERT INTO transactions (transaction_id, transaction_date, unit_id, product_id, store_id, final_sale_price) VALUES (:tid, :tdate, :uid, :pid, :sid, :price)")
+            connection.execute(phone_txn_sql, {"tid": new_txn_id, "tdate": txn_date, "uid": cart_phone['unit_id'], "pid": phone_product_id, "sid": store_id, "price": cart_phone['price']})
+            
+            # Update phone inventory status
+            update_phone_sql = text("UPDATE inventory_units SET status = 'Sold' WHERE unit_id = :uid")
+            connection.execute(update_phone_sql, {"uid": cart_phone['unit_id']})
+            
+            # 3. Process Accessory Sales
+            for acc in cart_accessories:
+                # Insert accessory transaction (note: unit_id is NULL)
+                acc_txn_sql = text("INSERT INTO transactions (transaction_id, transaction_date, product_id, store_id, final_sale_price) VALUES (:tid, :tdate, :pid, :sid, :price)")
+                connection.execute(acc_txn_sql, {"tid": new_txn_id, "tdate": txn_date, "pid": acc['product_id'], "sid": store_id, "price": acc['price']})
+
+                # Update accessory inventory quantity
+                update_acc_sql = text("UPDATE accessory_inventory SET quantity = quantity - :qty WHERE product_id = :pid AND store_id = :sid")
+                connection.execute(update_acc_sql, {"qty": acc['quantity'], "pid": acc['product_id'], "sid": store_id})
+
+            # 4. Commit transaction
+            transaction.commit()
+            return jsonify({"success": True, "transaction_id": new_txn_id})
+
+        except Exception as e:
+            transaction.rollback()
+            print(f"CHECKOUT FAILED: {e}")
+            return jsonify({"error": f"An error occurred during checkout: {e}"}), 500
 
 # 5. MAIN EXECUTION BLOCK
 # ==============================================================================
