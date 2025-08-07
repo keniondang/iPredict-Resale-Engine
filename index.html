@@ -36,6 +36,13 @@
             --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
             box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
         }
+        /* Custom Modal Styles */
+        .modal-overlay {
+            transition: opacity 0.3s ease;
+        }
+        .modal-container {
+            transition: transform 0.3s ease;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -57,7 +64,7 @@
         <div class="mb-6 border-b border-gray-200">
             <nav class="-mb-px flex space-x-6 overflow-x-auto" id="tabs">
                 <button data-tab="appraisal" class="tab-button active py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none flex-shrink-0">
-                    Buy Price Appraisal
+                    Appraisal & Purchase
                 </button>
                 <button data-tab="inventory" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none flex-shrink-0">
                     Inventory
@@ -83,6 +90,7 @@
                             <div>
                                 <label for="appraisal-model" class="block text-sm font-medium text-gray-700">Phone Model</label>
                                 <select id="appraisal-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                     <option value="">Select a Model</option>
                                 </select>
                             </div>
                             <div>
@@ -94,7 +102,7 @@
                                     <option>D</option>
                                 </select>
                             </div>
-                            <div>
+                             <div>
                                 <label for="desired-profit" class="block text-sm font-medium text-gray-700">Desired Profit ($)</label>
                                 <input type="number" id="desired-profit" value="25" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
                             </div>
@@ -103,16 +111,37 @@
                             </button>
                         </form>
                     </div>
-                    <div id="appraisal-results-container" class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm hidden">
-                        <h2 class="text-xl font-semibold mb-4">Appraisal Results</h2>
-                         <div id="appraisal-loader" class="flex justify-center items-center h-48 hidden">
-                            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                    <div class="md:col-span-2 space-y-6">
+                        <div id="appraisal-results-container" class="bg-white p-6 rounded-xl shadow-sm hidden">
+                            <h2 class="text-xl font-semibold mb-4">Appraisal Results</h2>
+                             <div id="appraisal-loader" class="flex justify-center items-center h-48 hidden">
+                                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
+                            </div>
+                            <div id="appraisal-results" class="space-y-4"></div>
                         </div>
-                        <div id="appraisal-results" class="space-y-4"></div>
+                         <div id="purchase-section" class="bg-white p-6 rounded-xl shadow-sm hidden">
+                            <h2 class="text-xl font-semibold mb-2">Finalize Purchase</h2>
+                            <div id="purchase-summary" class="mb-4 p-3 bg-gray-50 rounded-md border"></div>
+                            <form id="purchase-form" class="space-y-4">
+                                <div>
+                                    <label for="purchase-store" class="block text-sm font-medium text-gray-700">Store</label>
+                                    <select id="purchase-store" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                         <option value="">Select a Store</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="purchase-price" class="block text-sm font-medium text-gray-700">Final Purchase Price ($)</label>
+                                    <input type="number" step="0.01" id="purchase-price" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="Enter final price...">
+                                </div>
+                                <button type="submit" class="w-full bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                    Finalize Purchase
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
-
+            
             <div id="inventory-content" class="tab-pane hidden">
                  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="bg-white p-6 rounded-xl shadow-sm">
@@ -265,9 +294,29 @@
         </main>
     </div>
 
+    <div id="custom-modal" class="modal-overlay fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+        <div class="modal-container relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <div id="modal-icon" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                     <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </div>
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2" id="modal-title">Success</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-gray-500" id="modal-message">
+                        Your action was successful.
+                    </p>
+                </div>
+                <div class="items-center px-4 py-3" id="modal-buttons">
+                    </div>
+            </div>
+        </div>
+    </div>
+
+
     <script>
         const API_BASE_URL = 'http://127.0.0.1:5000/api';
         let historyChartInstance = null;
+        let currentPurchaseInfo = {};
 
         // --- Helper Functions ---
         const showLoader = (loaderId) => document.getElementById(loaderId).classList.remove('hidden');
@@ -285,12 +334,54 @@
                         throw new Error(`Server returned an unreadable error: ${response.status} ${response.statusText}`);
                     }
                 }
-                return await response.json();
+                const text = await response.text();
+                return text ? JSON.parse(text) : {};
             } catch (error) {
                 console.error(`Fetch error for ${endpoint}:`, error);
                 throw error;
             }
         }
+
+        // --- Custom Modal Logic ---
+        function showModal({ title, message, confirmText, cancelText, onConfirm, iconType = 'success' }) {
+            const modal = document.getElementById('custom-modal');
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').innerHTML = message; // Use innerHTML to allow for formatted messages
+            const buttonsDiv = document.getElementById('modal-buttons');
+            buttonsDiv.innerHTML = ''; // Clear previous buttons
+
+            const iconDiv = document.getElementById('modal-icon');
+            if (iconType === 'success') {
+                iconDiv.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100';
+                iconDiv.innerHTML = '<svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>';
+            } else if (iconType === 'warning') {
+                iconDiv.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100';
+                iconDiv.innerHTML = '<svg class="h-6 w-6 text-yellow-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>';
+            } else { // error
+                 iconDiv.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100';
+                 iconDiv.innerHTML = '<svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
+            }
+
+            if (onConfirm) { // This means it's a confirmation dialog
+                const confirmBtn = document.createElement('button');
+                confirmBtn.className = "px-4 py-2 bg-green-500 text-white text-base font-medium rounded-md w-auto shadow-sm hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-300";
+                confirmBtn.textContent = confirmText || 'Confirm';
+                confirmBtn.onclick = () => {
+                    onConfirm();
+                    modal.classList.add('hidden');
+                };
+                buttonsDiv.appendChild(confirmBtn);
+            }
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = "px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-auto shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 ml-2";
+            closeBtn.textContent = cancelText || 'Close';
+            closeBtn.onclick = () => modal.classList.add('hidden');
+            buttonsDiv.appendChild(closeBtn);
+            
+            modal.classList.remove('hidden');
+        }
+
 
         // --- Live Clock ---
         function updateClock() {
@@ -308,20 +399,31 @@
         document.getElementById('tabs').addEventListener('click', (e) => {
             if (e.target.matches('button')) {
                 const tab = e.target.dataset.tab;
-                
-                document.querySelectorAll('.tab-button').forEach(button => button.classList.remove('active'));
-                e.target.classList.add('active');
-
-                document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
-                document.getElementById(`${tab}-content`).classList.remove('hidden');
-                
-                if (tab === 'inventory' && !document.getElementById('inventory-accordion-container').innerHTML.trim()) {
-                    loadCombinedInventory();
-                } else if (tab === 'history' && !document.getElementById('history-table-body').innerHTML.trim()) {
-                    loadTransactionHistory();
-                }
+                switchTab(tab);
             }
         });
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-button').forEach(button => button.classList.remove('active'));
+            const activeTabButton = document.querySelector(`[data-tab="${tabId}"]`)
+            if(activeTabButton){
+                activeTabButton.classList.add('active');
+            }
+
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+            document.getElementById(`${tabId}-content`).classList.remove('hidden');
+
+             if (tabId === 'appraisal') {
+                document.getElementById('appraisal-results-container').classList.add('hidden');
+                document.getElementById('purchase-section').classList.add('hidden');
+            }
+            
+            if (tabId === 'inventory' && !document.getElementById('inventory-accordion-container').innerHTML.trim()) {
+                loadCombinedInventory();
+            } else if (tabId === 'history' && !document.getElementById('history-table-body').innerHTML.trim()) {
+                loadTransactionHistory();
+            }
+        }
 
         // --- Populate Phone Models ---
         async function populatePhoneModels() {
@@ -352,28 +454,43 @@
         async function populateStores() {
             try {
                 const stores = await apiFetch('/stores');
-                const historyStoreSelect = document.getElementById('history-store');
-                stores.forEach(store => {
-                    historyStoreSelect.innerHTML += `<option value="${store.store_id}">${store.store_name}</option>`;
+                const selects = [
+                    document.getElementById('history-store'),
+                    document.getElementById('purchase-store')
+                ];
+                selects.forEach(select => {
+                    if(select) {
+                        const firstOption = select.options[0] ? select.options[0].outerHTML : '';
+                        select.innerHTML = firstOption;
+                        stores.forEach(store => {
+                            select.innerHTML += `<option value="${store.store_id}">${store.store_name}</option>`;
+                        });
+                    }
                 });
             } catch (error) {
                 console.error("Failed to populate stores", error);
-                document.getElementById('history-store').innerHTML = '<option>Error loading</option>';
+                 document.getElementById('history-store').innerHTML = '<option>Error loading</option>';
             }
         }
 
-
-        // --- Appraisal Logic ---
+        // --- Appraisal & Purchase Logic ---
         document.getElementById('appraisal-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const model = document.getElementById('appraisal-model').value;
             const grade = document.getElementById('appraisal-grade').value;
             const desiredProfit = document.getElementById('desired-profit').value;
             const resultsContainer = document.getElementById('appraisal-results-container');
+            const purchaseSection = document.getElementById('purchase-section');
             const resultsDiv = document.getElementById('appraisal-results');
+
+            if (!model) {
+                showModal({ title: 'Input Error', message: 'Please select a phone model to appraise.', cancelText: 'OK', iconType: 'warning' });
+                return;
+            }
             
             showLoader('appraisal-loader');
             resultsContainer.classList.remove('hidden');
+            purchaseSection.classList.add('hidden'); 
             resultsDiv.innerHTML = '';
 
             try {
@@ -382,6 +499,11 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ model_name: model, grade: grade, desired_profit: desiredProfit })
                 });
+
+                currentPurchaseInfo = {
+                    model_name: data.model_appraised,
+                    grade: data.grade
+                };
                 
                 const velocityColor = data.predicted_sales_velocity === 'Fast Mover' ? 'text-green-600' : 
                                     data.predicted_sales_velocity === 'Medium Mover' ? 'text-yellow-600' : 'text-red-600';
@@ -392,15 +514,71 @@
                 }
 
                 resultsDiv.innerHTML = `<div class="space-y-6"><div><p class="text-sm text-gray-500">Model Appraised</p><p class="text-lg font-semibold">${data.model_appraised} (Grade: ${data.grade})</p></div>${marketAlertHtml}<div class="p-4 border-2 border-green-500 rounded-lg bg-green-50"><p class="text-sm font-medium text-green-800 text-center">Primary Recommendation: Target Buy Price</p><p class="text-center text-sm text-gray-600 mt-1">To make a <span class="font-bold">$${desiredProfit}</span> profit, you should offer:</p><p class="text-4xl font-bold text-center my-2 text-green-600">$${data.profit_targeted_buy_price_range.low.toFixed(2)} - $${data.profit_targeted_buy_price_range.high.toFixed(2)}</p><p class="text-xs text-center text-gray-500">(Median Target: $${data.profit_targeted_buy_price_range.median.toFixed(2)})</p></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t"><div class="p-3 border rounded-lg"><p class="text-sm font-medium text-gray-700">Historically-Based Buy Price</p><p class="text-sm text-gray-500 mb-1">(What you've paid in the past)</p><p class="text-lg font-semibold text-indigo-600">$${data.historically_based_buy_price.low.toFixed(2)} - $${data.historically_based_buy_price.high.toFixed(2)}</p><p class="text-sm text-gray-500">Median: $${data.historically_based_buy_price.median.toFixed(2)}</p></div><div class="p-3 border rounded-lg"><p class="text-sm font-medium text-gray-700">Predicted Sales Velocity</p><p class="text-lg font-semibold ${velocityColor}">${data.predicted_sales_velocity}</p><p class="text-xs text-gray-500 mt-1">${data.velocity_reason || ''}</p></div></div></div>`;
+                
+                // Show purchase section and pre-fill data
+                purchaseSection.classList.remove('hidden');
+                document.getElementById('purchase-summary').innerHTML = `You are about to purchase a <strong>Grade ${data.grade} ${data.model_appraised}</strong>.`;
+                document.getElementById('purchase-price').value = data.profit_targeted_buy_price_range.median.toFixed(2);
+                
             } catch (error) {
-                resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+                 showModal({ title: 'Appraisal Failed', message: error.message, cancelText: 'OK', iconType: 'error' });
             } finally {
                 hideLoader('appraisal-loader');
             }
         });
-
-        // --- NEW Combined Inventory Logic ---
         
+        document.getElementById('purchase-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const storeId = document.getElementById('purchase-store').value;
+            const price = document.getElementById('purchase-price').value;
+            
+            if (!storeId || !price) {
+                 showModal({ title: 'Input Error', message: 'Please select a Store and enter a Final Purchase Price.', cancelText: 'OK', iconType: 'warning' });
+                return;
+            }
+
+            const storeName = document.getElementById('purchase-store').options[document.getElementById('purchase-store').selectedIndex].text;
+
+            showModal({
+                title: 'Confirm Purchase',
+                message: `Are you sure you want to purchase a <strong>Grade ${currentPurchaseInfo.grade} ${currentPurchaseInfo.model_name}</strong> for <strong>$${price}</strong> at <strong>${storeName}</strong>?`,
+                confirmText: 'Yes, Purchase',
+                cancelText: 'Cancel',
+                iconType: 'warning',
+                onConfirm: async () => {
+                    try {
+                        const response = await apiFetch('/inventory/buy', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                ...currentPurchaseInfo,
+                                store_id: storeId,
+                                acquisition_price: price
+                            })
+                        });
+                        showModal({
+                            title: 'Purchase Successful!',
+                            message: `A new inventory unit has been created with Unit ID: <strong>${response.unit_id}</strong>`,
+                            cancelText: 'OK',
+                            iconType: 'success'
+                        });
+                        
+                        // Reset forms and hide results/purchase sections
+                        document.getElementById('appraisal-form').reset();
+                        document.getElementById('purchase-form').reset();
+                        document.getElementById('appraisal-results-container').classList.add('hidden');
+                        document.getElementById('purchase-section').classList.add('hidden');
+                         // Force a refresh of inventory data so the new item appears on next view
+                        document.getElementById('inventory-accordion-container').innerHTML = '';
+                    } catch (error) {
+                        showModal({ title: 'Purchase Failed', message: error.message, cancelText: 'OK', iconType: 'error' });
+                    }
+                }
+            });
+        });
+
+
+        // --- Combined Inventory Logic ---
         async function loadCombinedInventory() {
             const accordionContainer = document.getElementById('inventory-accordion-container');
             showLoader('inventory-accordion-loader');

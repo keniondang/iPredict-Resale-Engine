@@ -11,12 +11,12 @@ import pandas as pd
 import numpy as np
 import joblib
 import re
-from sqlalchemy import text
+from sqlalchemy import text, func
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import datetime, timedelta
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 import urllib
 import matplotlib
 matplotlib.use('Agg') # Use a non-interactive backend for Matplotlib
@@ -236,6 +236,7 @@ db_engine = get_db_engine()
 try:
     print("--- Initializing Predictor Classes and Loading Data from DB ---")
     products_df_global = pd.read_sql("SELECT * FROM products", db_engine)
+    products_df_global['release_date'] = pd.to_datetime(products_df_global['release_date'])
     inventory_df_global = pd.read_sql("SELECT * FROM inventory_units", db_engine)
     transactions_df_global = pd.read_sql("SELECT * FROM transactions", db_engine)
     stores_df_global = pd.read_sql("SELECT * FROM stores", db_engine)
@@ -270,10 +271,13 @@ def get_stores():
     if stores_df_global is None:
         return jsonify({"error": "Stores data not loaded"}), 500
     try:
-        stores_list = stores_df_global[['store_id', 'store_name']].to_dict('records')
+        # Return all stores except the 'Online Store' for purchasing context
+        physical_stores = stores_df_global[stores_df_global['store_name'] != 'Online Store']
+        stores_list = physical_stores[['store_id', 'store_name']].to_dict('records')
         return jsonify(sorted(stores_list, key=lambda x: x['store_name']))
     except Exception as e:
         return jsonify({"error": f"Could not load stores: {e}"}), 500
+
 
 @app.route('/api/appraise/buy', methods=['POST'])
 def appraise_buy():
@@ -339,6 +343,82 @@ def appraise_buy():
 
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
+@app.route('/api/inventory/buy', methods=['POST'])
+def buy_inventory():
+    """Adds a new phone unit to the inventory_units table."""
+    data = request.get_json()
+    model_name = data.get('model_name')
+    grade = data.get('grade')
+    store_id = data.get('store_id')
+    acquisition_price = data.get('acquisition_price')
+
+    if not all([model_name, grade, store_id, acquisition_price]):
+        return jsonify({"error": "model_name, grade, store_id, and acquisition_price are required"}), 400
+
+    try:
+        # Find product details from the global DataFrame
+        product_details = products_df_global[products_df_global['model_name'] == model_name].iloc[0]
+        product_id = product_details['product_id']
+        release_date = product_details['release_date']
+        
+        acquisition_date = datetime.now()
+        age_at_acquisition = (acquisition_date - release_date).days
+        
+        with db_engine.connect() as connection:
+            transaction = connection.begin()
+            try:
+                # Get the current max unit_id to determine the new one safely
+                max_unit_id_query = text("SELECT MAX(unit_id) FROM inventory_units")
+                max_unit_id_result = connection.execute(max_unit_id_query).scalar()
+                new_unit_id = (max_unit_id_result or 0) + 1
+
+                insert_query = text("""
+                    INSERT INTO inventory_units 
+                    (unit_id, product_id, store_id, acquisition_date, grade, age_at_acquisition_days, acquisition_price, status)
+                    VALUES 
+                    (:unit_id, :product_id, :store_id, :acquisition_date, :grade, :age_at_acquisition_days, :acquisition_price, 'In Stock')
+                """)
+                
+                connection.execute(insert_query, {
+                    "unit_id": new_unit_id,
+                    "product_id": int(product_id),
+                    "store_id": int(store_id),
+                    "acquisition_date": acquisition_date.strftime('%Y-%m-%d'),
+                    "grade": grade,
+                    "age_at_acquisition_days": age_at_acquisition,
+                    "acquisition_price": float(acquisition_price)
+                })
+                
+                transaction.commit()
+                
+                # Update the global inventory DataFrame to reflect the change immediately
+                global inventory_df_global
+                new_record = pd.DataFrame([{
+                    "unit_id": new_unit_id,
+                    "product_id": int(product_id),
+                    "store_id": int(store_id),
+                    "acquisition_date": acquisition_date,
+                    "grade": grade,
+                    "age_at_acquisition_days": age_at_acquisition,
+                    "acquisition_price": float(acquisition_price),
+                    "status": "In Stock"
+                }])
+                inventory_df_global = pd.concat([inventory_df_global, new_record], ignore_index=True)
+
+                return jsonify({"success": True, "unit_id": new_unit_id})
+
+            except Exception as e:
+                transaction.rollback()
+                print(f"Database transaction failed: {e}")
+                return jsonify({"error": f"Database error: {e}"}), 500
+
+    except IndexError:
+        return jsonify({"error": f"Model '{model_name}' not found."}), 404
+    except Exception as e:
+        print(f"An error occurred in /api/inventory/buy: {e}")
+        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
 
 @app.route('/api/inventory/combined', methods=['GET'])
 def get_combined_inventory():
@@ -423,11 +503,14 @@ def predict_dynamic_sell_price():
     if not unit_id: return jsonify({"error": "unit_id is required"}), 400
     date_str = datetime.now().strftime('%Y-%m-%d')
     try:
+        dynamic_price_predictor.inventory_df = inventory_df_global.copy()
+        dynamic_price_predictor.inventory_df['acquisition_date'] = pd.to_datetime(dynamic_price_predictor.inventory_df['acquisition_date'])
         result = dynamic_price_predictor.predict(int(unit_id), date_str)
         if "error" in result: return jsonify(result), 404
         return jsonify(result)
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
 
 @app.route('/api/accessories/details/<int:product_id>', methods=['GET'])
 def get_accessory_details(product_id):
