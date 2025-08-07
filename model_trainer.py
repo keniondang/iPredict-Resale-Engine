@@ -386,7 +386,9 @@ def train_forecast_model(category_value: str, products_df: pd.DataFrame, transac
     print(f"Model for '{category_value}' saved successfully.")
 
 
-def build_discontinuation_list(products: pd.DataFrame, transactions: pd.DataFrame, compatibility: pd.DataFrame, accessory_inventory: pd.DataFrame, models_dir: str, sales_threshold: int = 10, days_to_check: int = 180):
+# FILE: model_trainer.py
+
+def build_discontinuation_list(products: pd.DataFrame, transactions: pd.DataFrame, compatibility: pd.DataFrame, accessory_inventory: pd.DataFrame, models_dir: str, sales_threshold: int = 10, days_to_check: int = 30):
     """Analyzes sales data to identify accessories for obsolete phones."""
     print("\n--- [Task] Building Discontinuation Alert List ---")
     print("Step 1: Preparing data for analysis...")
@@ -404,7 +406,14 @@ def build_discontinuation_list(products: pd.DataFrame, transactions: pd.DataFram
         total_sales = recent_phone_sales[recent_phone_sales['product_id'].isin(compatible_phone_ids)].shape[0]
         if total_sales < sales_threshold:
             accessory_info = products[products['product_id'] == acc_id].iloc[0]
-            discontinuation_list.append({'product_id': acc_id, 'model_name': accessory_info['model_name'], 'compatible_phone_sales_past_180_days': total_sales})
+            
+            # FIX: Cast NumPy integer types to standard Python integers here
+            discontinuation_list.append({
+                'product_id': int(acc_id),
+                'model_name': accessory_info['model_name'],
+                'compatible_phone_sales_past_180_days': int(total_sales)
+            })
+
     print(f"Step 3: Found {len(discontinuation_list)} accessories to recommend for discontinuation.")
     output_path = os.path.join(models_dir, 'discontinuation_list.joblib')
     joblib.dump(discontinuation_list, output_path)

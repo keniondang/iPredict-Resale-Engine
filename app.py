@@ -91,9 +91,8 @@ class AdvancedVelocityPredictor:
             self.features = pipeline['features']
             self.historical_data = pipeline['historical_data']
             self.products_df = products_df
-            print("Successfully loaded ADVANCED velocity model pipeline.")
         except Exception as e:
-            print(f"FATAL: Could not load advanced velocity model. Error: {e}")
+            print(f"FATAL: Could not load velocity model. Error: {e}")
             raise e
 
     def predict(self, model_name: str, grade: str):
@@ -245,11 +244,14 @@ try:
     velocity_predictor = AdvancedVelocityPredictor('models/velocity_model_advanced.joblib', products_df_global)
     recommender = Recommender('models/recommendation_data.joblib', products_df_global)
     discontinuation_list_global = joblib.load('models/discontinuation_list.joblib')
+    # Create a set of product IDs for fast lookups
+    discontinuation_id_set = {item['product_id'] for item in discontinuation_list_global}
     print("--- All predictors and data loaded successfully. API is ready. ---")
 except Exception as e:
     print(f"FATAL ERROR: Failed to initialize predictors or load data. Details: {e}")
     price_predictor, dynamic_price_predictor, velocity_predictor, recommender = None, None, None, None
     products_df_global, inventory_df_global, stores_df_global, discontinuation_list_global = None, None, None, None
+    discontinuation_id_set = set()
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
@@ -338,23 +340,79 @@ def appraise_buy():
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
 
-@app.route('/api/inventory/all', methods=['GET'])
-def get_all_inventory():
-    if inventory_df_global is None or products_df_global is None or stores_df_global is None:
-        return jsonify({"error": "Inventory, products, or stores data not loaded"}), 500
+@app.route('/api/inventory/combined', methods=['GET'])
+def get_combined_inventory():
+    """ Endpoint to fetch and enrich both phone and accessory inventory. """
     try:
-        in_stock = inventory_df_global[inventory_df_global['status'] == 'In Stock'].copy()
-        in_stock_details = pd.merge(in_stock, products_df_global[['product_id', 'model_name']], on='product_id', how='left')
-        in_stock_with_stores = pd.merge(in_stock_details, stores_df_global[['store_id', 'store_name']], on='store_id', how='left')
-        in_stock_with_stores['acquisition_date'] = pd.to_datetime(in_stock_with_stores['acquisition_date']).dt.strftime('%Y-%m-%d')
-        grouped_inventory = in_stock_with_stores.groupby('store_name')
-        response_data = {}
-        for store_name, group_df in grouped_inventory:
-            items = group_df[['unit_id', 'model_name', 'grade', 'acquisition_date']].to_dict('records')
-            response_data[store_name] = items
+        phone_query = text("""
+            SELECT i.unit_id, i.grade, i.acquisition_date, p.model_name, s.store_name
+            FROM inventory_units i
+            JOIN products p ON i.product_id = p.product_id
+            JOIN stores s ON i.store_id = s.store_id
+            WHERE i.status = 'In Stock'
+        """)
+        accessory_query = text("""
+            SELECT ai.product_id, ai.quantity, p.model_name, s.store_name
+            FROM accessory_inventory ai
+            JOIN products p ON ai.product_id = p.product_id
+            JOIN stores s ON ai.store_id = s.store_id
+            WHERE ai.quantity > 0
+        """)
+        
+        with db_engine.connect() as connection:
+            phones_df = pd.read_sql(phone_query, connection)
+            accessories_df = pd.read_sql(accessory_query, connection)
+            
+        phones_df['acquisition_date'] = pd.to_datetime(phones_df['acquisition_date']).dt.strftime('%Y-%m-%d')
+        
+        # FIX: Filter out the 'Online Store' before initializing the response data
+        stores_to_display = stores_df_global[stores_df_global['store_name'] != 'Online Store']
+        
+        response_data = {store_name: {
+            "summary": {"phone_units": 0, "accessory_types": 0},
+            "phones": [],
+            "accessories": []
+        } for store_name in stores_to_display['store_name'].unique()}
+
+        if not phones_df.empty:
+            # Enrich phones with velocity predictions
+            phones_list = phones_df.to_dict('records')
+            for phone in phones_list:
+                prediction = velocity_predictor.predict(phone['model_name'], phone['grade'])
+                phone['velocity_label'] = prediction.get('predicted_sales_velocity', 'Unknown')
+            
+            # Group phones by store
+            phones_df_enriched = pd.DataFrame(phones_list)
+            grouped_phones = phones_df_enriched.groupby('store_name')
+            for store_name, group_df in grouped_phones:
+                if store_name in response_data:
+                    response_data[store_name]['phones'] = group_df.to_dict('records')
+                    response_data[store_name]['summary']['phone_units'] = len(group_df)
+
+        if not accessories_df.empty:
+            # Enrich accessories with discontinuation alerts
+            accessories_list = accessories_df.to_dict('records')
+            for acc in accessories_list:
+                if acc['product_id'] in discontinuation_id_set:
+                    acc['discontinuation_label'] = 'Discontinuation Alert'
+            
+            # Group accessories by store
+            accessories_df_enriched = pd.DataFrame(accessories_list)
+            
+            # Replace NaN values with None to ensure valid JSON serialization
+            accessories_df_enriched.replace({np.nan: None}, inplace=True)
+            
+            grouped_accessories = accessories_df_enriched.groupby('store_name')
+            for store_name, group_df in grouped_accessories:
+                 if store_name in response_data:
+                    response_data[store_name]['accessories'] = group_df.to_dict('records')
+                    response_data[store_name]['summary']['accessory_types'] = len(group_df)
+        
         return jsonify(response_data)
+
     except Exception as e:
-        return jsonify({"error": f"Could not load inventory: {e}"}), 500
+        print(f"Error in /api/inventory/combined: {e}")
+        return jsonify({"error": "Could not load combined inventory"}), 500
 
 @app.route('/api/inventory/price', methods=['POST'])
 def predict_dynamic_sell_price():
@@ -371,36 +429,91 @@ def predict_dynamic_sell_price():
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
 
+@app.route('/api/accessories/details/<int:product_id>', methods=['GET'])
+def get_accessory_details(product_id):
+    """ Endpoint to get details and compatibility for a single accessory. """
+    try:
+        accessory_info_query = text("SELECT model_name, original_msrp FROM products WHERE product_id = :pid")
+        compat_query = text("""
+            SELECT p.model_name
+            FROM accessory_compatibility ac
+            JOIN products p ON ac.phone_product_id = p.product_id
+            WHERE ac.accessory_product_id = :pid
+            ORDER BY p.release_date DESC;
+        """)
+
+        with db_engine.connect() as connection:
+            accessory_info = connection.execute(accessory_info_query, {"pid": product_id}).fetchone()
+            if not accessory_info:
+                return jsonify({"error": "Accessory not found"}), 404
+            
+            compat_list = connection.execute(compat_query, {"pid": product_id}).fetchall()
+            compatible_phones = [row[0] for row in compat_list]
+
+        response = {
+            "product_id": product_id,
+            "model_name": accessory_info[0],
+            "original_msrp": accessory_info[1],
+            "compatible_phones": compatible_phones
+        }
+        return jsonify(response)
+
+    except Exception as e:
+        print(f"Error getting accessory details for ID {product_id}: {e}")
+        return jsonify({"error": "Could not retrieve accessory details"}), 500
+
 @app.route('/api/transactions/history', methods=['GET'])
 def get_transaction_history():
-    """ Endpoint to retrieve and filter transaction history. """
+    """ Endpoint to retrieve and filter transaction history for both phones and accessories. """
     try:
-        # Construct the base query
-        query = text("""
+        base_query = """
+            -- Phone Sales
             SELECT
                 t.transaction_id,
                 t.transaction_date,
-                t.final_sale_price,
                 p.model_name,
+                p.product_type,
                 i.grade,
-                i.acquisition_price,
-                i.acquisition_date,
+                t.final_sale_price,
+                i.acquisition_price AS cost,
                 s.store_name,
-                s.store_id
+                s.store_id,
+                i.acquisition_date
             FROM transactions t
             JOIN inventory_units i ON t.unit_id = i.unit_id
             JOIN products p ON i.product_id = p.product_id
             JOIN stores s ON i.store_id = s.store_id
             WHERE p.product_type = 'Used Phone'
-        """)
-        with db_engine.connect() as connection:
-            df = pd.read_sql(query, connection)
 
-        # Convert date columns
-        df['transaction_date'] = pd.to_datetime(df['transaction_date'])
-        df['acquisition_date'] = pd.to_datetime(df['acquisition_date'])
+            UNION ALL
+
+            -- Accessory Sales
+            SELECT
+                t.transaction_id,
+                t.transaction_date,
+                p.model_name,
+                p.product_type,
+                NULL AS grade,
+                t.final_sale_price,
+                p.original_msrp AS cost,
+                s.store_name,
+                s.store_id,
+                NULL as acquisition_date
+            FROM transactions t
+            JOIN products p ON t.product_id = p.product_id
+            JOIN stores s ON t.store_id = s.store_id
+            WHERE p.product_type = 'Accessory'
+        """
         
-        # Apply filters from request arguments
+        with db_engine.connect() as connection:
+            df = pd.read_sql_query(text(base_query), connection)
+
+        # Sort by transaction_id descending
+        df = df.sort_values('transaction_id', ascending=False)
+        
+        df['transaction_date'] = pd.to_datetime(df['transaction_date'])
+        df['acquisition_date'] = pd.to_datetime(df['acquisition_date'], errors='coerce')
+        
         if request.args.get('model_name'):
             df = df[df['model_name'] == request.args.get('model_name')]
         if request.args.get('grade'):
@@ -415,23 +528,22 @@ def get_transaction_history():
         if df.empty:
             return jsonify({"summary": {}, "transactions": []})
 
-        # Calculations
-        df['profit_loss'] = df['final_sale_price'] - df['acquisition_price']
+        df['profit_loss'] = df['final_sale_price'] - df['cost']
         df['days_in_stock'] = (df['transaction_date'] - df['acquisition_date']).dt.days
 
-        # Summary Statistics
+        phones_df = df[df['product_type'] == 'Used Phone'].copy()
+        
         summary = {
             "total_revenue": df['final_sale_price'].sum(),
-            "total_cost": df['acquisition_price'].sum(),
+            "total_cost": df['cost'].sum(),
             "total_profit": df['profit_loss'].sum(),
             "total_items_sold": len(df),
             "average_profit_per_item": df['profit_loss'].mean(),
-            "average_days_in_stock": df['days_in_stock'].mean()
+            "average_days_in_stock": phones_df['days_in_stock'].mean()
         }
 
-        # Prepare transaction list for JSON response
         df['transaction_date'] = df['transaction_date'].dt.strftime('%Y-%m-%d')
-        df.replace({np.nan: None, np.inf: None, -np.inf: None}, inplace=True)
+        df.replace({np.nan: None, pd.NaT: None, np.inf: None, -np.inf: None}, inplace=True)
         transactions = df.to_dict('records')
         
         return jsonify({"summary": summary, "transactions": transactions})
@@ -492,15 +604,12 @@ def get_product_demand_forecast():
         future_df['floor'] = 0
         forecast_df = model.predict(future_df)
 
-        # Calculate total forecast for the period
         total_forecast = forecast_df['yhat'][-int(periods):].sum()
 
-        # Prepare daily data for the chart
         daily_data = forecast_df[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(int(periods)).copy()
         daily_data.rename(columns={'ds': 'date', 'yhat': 'prediction', 'yhat_lower': 'lower_bound', 'yhat_upper': 'upper_bound'}, inplace=True)
         daily_data['date'] = daily_data['date'].dt.strftime('%Y-%m-%d')
 
-        # Build the final response object
         response_data = {
             "daily_data": daily_data.to_dict('records'),
             "total_forecast": int(round(total_forecast))
