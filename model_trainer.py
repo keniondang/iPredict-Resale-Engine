@@ -15,6 +15,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report, mean_absolute_error
 import lightgbm as lgb
 from prophet import Prophet
@@ -72,29 +73,25 @@ def load_data_from_db(engine, table_name):
 
 def define_target_variable(df):
     """
-    Calculates the time an item spent in stock and categorizes it using quantiles.
+    Calculates the time an item spent in stock and categorizes it into a
+    binary 'Prime' or 'Aging' inventory status based on the median.
     """
     df['days_in_stock'] = (df['transaction_date'] - df['acquisition_date']).dt.days
     df = df[df['days_in_stock'] >= 0]
 
-    if len(df['days_in_stock']) < 3: # Handle case with too little data
-        return df, None
+    if len(df['days_in_stock']) < 2: # Handle case with too little data
+        return df
 
-    fast_threshold = df['days_in_stock'].quantile(0.33)
-    medium_threshold = df['days_in_stock'].quantile(0.66)
+    # Use the median as the single cutoff point
+    median_days = df['days_in_stock'].median()
 
-    print("--- Defining Mover Categories (based on quantiles) ---")
-    print(f"Fast Mover: Sold in <= {fast_threshold:.0f} days")
-    print(f"Medium Mover: Sold between {fast_threshold:.0f} and {medium_threshold:.0f} days")
-    print(f"Dead Stock: Took > {medium_threshold:.0f} days to sell")
+    print("--- Defining Mover Categories (Binary) ---")
+    print(f"Prime Inventory: Sold in <= {median_days:.0f} days")
+    print(f"Aging Inventory: Took > {median_days:.0f} days to sell")
 
-    conditions = [
-        df['days_in_stock'] <= fast_threshold,
-        (df['days_in_stock'] > fast_threshold) & (df['days_in_stock'] <= medium_threshold)
-    ]
-    choices = ['Fast Mover', 'Medium Mover']
-    df['mover_category'] = np.select(conditions, choices, default='Dead Stock')
-
+    # Create the binary target variable
+    df['mover_category'] = np.where(df['days_in_stock'] <= median_days, 'Prime Inventory', 'Aging Inventory')
+    
     return df
 
 def engineer_grade_specific_features(df):
@@ -178,9 +175,16 @@ def train_price_model(inventory: pd.DataFrame, products: pd.DataFrame, models_di
     data = pd.merge(inventory, products, on='product_id')
     data['days_since_model_release'] = (data['acquisition_date'] - data['release_date']).dt.days
     data['days_since_successor_release'] = (data['acquisition_date'] - data['successor_release_date']).dt.days
-    data['days_since_successor_release'].fillna(-999, inplace=True)
-    feature_columns = ['base_model', 'grade', 'storage_gb', 'model_tier', 'original_msrp', 'days_since_model_release', 'days_since_successor_release']
-    categorical_features = ['base_model', 'grade', 'model_tier']
+    data['days_since_successor_release'] = data['days_since_successor_release'].fillna(-999)
+    # --- Add Seasonality Features ---
+    data['month_of_year'] = data['acquisition_date'].dt.month
+    data['is_holiday_season'] = data['month_of_year'].isin([11, 12]).astype(int)
+    feature_columns = [
+        'base_model', 'grade', 'storage_gb', 'model_tier',
+        'original_msrp', 'days_since_model_release', 'days_since_successor_release',
+        'month_of_year', 'is_holiday_season'
+    ]
+    categorical_features = ['base_model', 'grade', 'model_tier', 'month_of_year']
     X = data[feature_columns]
     y = data['acquisition_price'].dropna()
     X = X.loc[y.index]
@@ -283,7 +287,9 @@ def train_dynamic_selling_price_model(inventory: pd.DataFrame, products: pd.Data
     print("Step 2: Engineering features from the perspective of the sale date...")
     data['days_since_model_release'] = (data['transaction_date'] - data['release_date']).dt.days
     data['days_since_successor_release'] = (data['transaction_date'] - data['successor_release_date']).dt.days
-    data['days_since_successor_release'].fillna(-999, inplace=True)
+    data['days_since_successor_release'] = data['days_since_successor_release'].fillna(-999)
+    data['month_of_year'] = data['transaction_date'].dt.month
+    data['is_holiday_season'] = data['month_of_year'].isin([11, 12]).astype(int)
     
     # This sales_history is for a different model and does not need the grade-specific logic
     sales_history = pd.merge(transactions, products, on='product_id')[['base_model', 'transaction_date']]
@@ -302,34 +308,61 @@ def train_dynamic_selling_price_model(inventory: pd.DataFrame, products: pd.Data
         return data_to_score.apply(calc_demand, axis=1)
 
     data['market_demand_7_days'] = _get_demand_for_selling_price(data, sales_history, products, 'transaction_date')
-    
+
     feature_columns = [
-        'original_msrp', 
-        'storage_gb', 
-        'grade', 
-        'model_tier', 
-        'base_model', 
-        'days_since_model_release', 
-        'days_since_successor_release', 
-        'market_demand_7_days'
+        'original_msrp',
+        'storage_gb',
+        'grade',
+        'model_tier',
+        'base_model',
+        'days_since_model_release',
+        'days_since_successor_release',
+        'market_demand_7_days',
+        'month_of_year', 'is_holiday_season'
     ]
-    
-    categorical_features = ['grade', 'model_tier', 'base_model']
+
+    categorical_features = ['grade', 'model_tier', 'base_model', 'month_of_year']
     X = data[feature_columns]
     y = data['final_sale_price']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    print("Step 3: Training quantile regression models with early stopping...")
+
+    # --- Step 3: Training quantile regression models with early stopping ---
+    print("Step 3: Training quantile regression models with Hyperparameter Tuning...")
+
     preprocessor = ColumnTransformer(transformers=[('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)], remainder='passthrough')
     preprocessor.fit(X_train)
     X_train_processed = preprocessor.transform(X_train)
     X_test_processed = preprocessor.transform(X_test)
+
+    # Define the parameter grid to search
+    param_grid = {
+        'learning_rate': [0.05, 0.1],
+        'n_estimators': [200, 500],
+        'num_leaves': [31, 50]
+    }
+
     models = {}
     quantiles = {'low_liquidate_price': 0.2, 'median_fair_market_price': 0.5, 'high_start_price': 0.8}
+
     for name, quantile in quantiles.items():
-        print(f"  - Training '{name}' model (quantile={quantile})...")
-        model = lgb.LGBMRegressor(objective='quantile', alpha=quantile, random_state=42, learning_rate=0.05, n_estimators=1000, num_leaves=31, reg_lambda=0.1)
-        model.fit(X_train_processed, y_train, eval_set=[(X_test_processed, y_test)], eval_metric='quantile', callbacks=[lgb.early_stopping(50, verbose=False)])
-        models[name] = model
+        print(f"  - Tuning '{name}' model (quantile={quantile})...")
+
+        # Create the base model
+        model = lgb.LGBMRegressor(objective='quantile', alpha=quantile, random_state=42)
+
+        # Set up GridSearchCV
+        grid_search = GridSearchCV(estimator=model, param_grid=param_grid, 
+                                scoring='neg_mean_absolute_error', 
+                                n_jobs=-1, cv=3, verbose=1)
+
+        # Fit the grid search to the data
+        grid_search.fit(X_train_processed, y_train)
+
+        # Store the best model found
+        models[name] = grid_search.best_estimator_
+        print(f"    ...Best params for '{name}': {grid_search.best_params_}")
+
+    # (The rest of the function, Step 4, remains the same)
     print("\nModel Performance:")
     median_model = models['median_fair_market_price']
     y_train_pred = median_model.predict(X_train_processed)
@@ -370,7 +403,7 @@ def train_forecast_model(category_value: str, products_df: pd.DataFrame, transac
             days_after_successor = (row_date - successor_date).days
             successor_decay = 0.5 - (days_after_successor / (365 * 1))
             decay_factor = min(decay_factor, successor_decay)
-        return max(1, base_cap * decay_factor)
+        return max(0.01, base_cap * decay_factor)
     daily_sales['cap'] = daily_sales['ds'].apply(calculate_cap)
     daily_sales['floor'] = 0
     print("  - Training Prophet model with 'logistic' growth...")
