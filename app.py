@@ -1,34 +1,17 @@
-# -*- coding: utf-8 -*-
-"""
-A self-contained Flask API server for the used phone business.
-This application loads all pre-trained models at startup and connects
-to a SQL Server database for all live data access.
-"""
-
-# 1. IMPORTS
-# ==============================================================================
 import pandas as pd
 import numpy as np
 import joblib
-import re
-from sqlalchemy import text, func
+import traceback
+from sqlalchemy import text
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime, timedelta
-from sqlalchemy import create_engine, inspect
+from datetime import datetime
+from sqlalchemy import create_engine
 import urllib
-import matplotlib
-matplotlib.use('Agg') # Use a non-interactive backend for Matplotlib
 
-# 2. DATABASE CONNECTION SETUP
-# ==============================================================================
-
-# --- CONFIGURATION ---
-# !!! IMPORTANT: UPDATE THESE VALUES TO MATCH YOUR SQL SERVER SETUP !!!
 SERVER_NAME = "localhost\\SQLEXPRESS"
 DATABASE_NAME = "UsedPhoneResale"
-# ---------------------
 
 def get_db_engine():
     """Creates and returns a SQLAlchemy engine for SQL Server."""
@@ -45,162 +28,6 @@ def get_db_engine():
     except Exception as e:
         print(f"FATAL: Could not create database engine. Error: {e}")
         return None
-
-# 3. PREDICTION & DATA-ACCESS CLASSES
-# ==============================================================================
-
-class PricePredictor:
-    """Uses the pre-trained price prediction model."""
-    def __init__(self, model_path, products_df):
-        self.pipeline = joblib.load(model_path)
-        self.products_df = products_df[products_df['product_type'] == 'Used Phone'].copy()
-        self.products_df['base_model'] = self.products_df['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
-        for col in ['release_date', 'successor_release_date']:
-            self.products_df[col] = pd.to_datetime(self.products_df[col], errors='coerce')
-
-    def predict(self, model_name: str, grade: str, appraisal_date_str: str):
-        appraisal_date = pd.to_datetime(appraisal_date_str)
-        phone_details_df = self.products_df[self.products_df['model_name'] == model_name]
-        if phone_details_df.empty: return {"error": f"Model '{model_name}' not found."}
-        phone_details = phone_details_df.iloc[0]
-        
-        # This is the same logic as the training script
-        features = {
-            'base_model': phone_details['base_model'], 
-            'grade': grade, 
-            'storage_gb': phone_details['storage_gb'], 
-            'model_tier': phone_details['model_tier'], 
-            'original_msrp': phone_details['original_msrp'], 
-            'days_since_model_release': (appraisal_date - phone_details['release_date']).days, 
-            'days_since_successor_release': (appraisal_date - phone_details['successor_release_date']).days if pd.notna(phone_details['successor_release_date']) else -999,
-            'month_of_year': appraisal_date.month,
-            'is_holiday_season': 1 if appraisal_date.month in [11, 12] else 0
-        }
-        features_df = pd.DataFrame([features])
-        features_processed = self.pipeline['preprocessor'].transform(features_df)
-        models = self.pipeline['models']
-        raw_predictions = [
-            models['low'].predict(features_processed)[0],
-            models['median'].predict(features_processed)[0],
-            models['high'].predict(features_processed)[0]
-        ]
-        sorted_predictions = sorted(raw_predictions)
-        price_prediction = {
-            "low": round(sorted_predictions[0], 2),
-            "median": round(sorted_predictions[1], 2),
-            "high": round(sorted_predictions[2], 2)
-        }
-        return {"model_appraised": model_name, "grade": grade, "predicted_price_range": price_prediction}
-
-class AdvancedVelocityPredictor:
-    """Uses the pre-trained ADVANCED sales velocity model."""
-    def __init__(self, model_path, products_df):
-        try:
-            pipeline = joblib.load(model_path)
-            self.model = pipeline['model']
-            self.features = pipeline['features']
-            self.historical_data = pipeline['historical_data']
-            self.products_df = products_df
-        except Exception as e:
-            print(f"FATAL: Could not load velocity model. Error: {e}")
-            raise e
-
-    def predict(self, model_name: str, grade: str):
-        """
-        Generates a sales velocity prediction by looking up the most recent
-        historical data for a specific model and grade.
-        """
-        product_info = self.products_df[self.products_df['model_name'] == model_name]
-        if product_info.empty:
-            return {"error": f"Model '{model_name}' not found."}
-        
-        product_id = product_info.iloc[0]['product_id']
-        product_details = self.products_df[self.products_df['product_id'] == product_id].iloc[0]
-
-        item_history = self.historical_data[
-            (self.historical_data['product_id'] == product_id) & 
-            (self.historical_data['grade'] == grade)
-        ].sort_values('transaction_date', ascending=False)
-
-        if item_history.empty:
-            sales_count_recent = 0
-            avg_days_recent = 0
-            reason = f"No sales history found for a Grade '{grade}' {model_name}. Predicting based on model tier and MSRP only."
-        else:
-            latest_stats = item_history.iloc[0]
-            sales_count_recent = latest_stats['grade_specific_sales_last_120d']
-            avg_days_recent = latest_stats['grade_specific_avg_days_last_120d']
-            reason = f"Based on historical data for Grade '{grade}' units: The average time to sell was {avg_days_recent:.1f} days, with {int(sales_count_recent)} units sold in the prior 120-day period."
-
-        prediction_data = pd.DataFrame([{
-            'model_tier': product_details['model_tier'],
-            'storage_gb': product_details['storage_gb'],
-            'original_msrp': product_details['original_msrp'],
-            'grade_specific_sales_last_120d': sales_count_recent,
-            'grade_specific_avg_days_last_120d': avg_days_recent
-        }])
-        
-        prediction_data = prediction_data[self.features]
-        predicted_category = self.model.predict(prediction_data)[0]
-
-        return {
-            "model_appraised": model_name,
-            "grade": grade,
-            "predicted_sales_velocity": predicted_category,
-            "velocity_reason": reason
-        }
-
-class DynamicPricePredictor:
-    """Uses the pre-trained dynamic selling price model."""
-    def __init__(self, model_path, products_df, inventory_df, transactions_df):
-        self.pipeline = joblib.load(model_path)
-        self.inventory_df = inventory_df.copy()
-        self.inventory_df['acquisition_date'] = pd.to_datetime(self.inventory_df['acquisition_date'])
-        products_df_phones = products_df[products_df['product_type'] == 'Used Phone'].copy()
-        products_df_phones['base_model'] = products_df_phones['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
-        for col in ['release_date', 'successor_release_date']:
-            products_df_phones[col] = pd.to_datetime(products_df_phones[col], errors='coerce')
-        self.products_df = products_df_phones
-        transactions_df['transaction_date'] = pd.to_datetime(transactions_df['transaction_date'])
-        sold_inventory_info = pd.merge(self.inventory_df, self.products_df[['product_id', 'base_model']], on='product_id')
-        self.sales_history = pd.merge(transactions_df, sold_inventory_info[['unit_id', 'base_model']], on='unit_id')
-
-    def _get_live_market_demand(self, base_model: str, prediction_date: datetime):
-        def get_predecessor(bm):
-            match = re.search(r'(\d+)', bm)
-            return bm.replace(str(match.group(1)), str(int(match.group(1)) - 1)) if match else None
-        demand = self.sales_history[(self.sales_history['base_model'] == base_model) & (self.sales_history['transaction_date'] < prediction_date) & (self.sales_history['transaction_date'] >= prediction_date - timedelta(days=7))].shape[0]
-        if demand == 0:
-            predecessor = get_predecessor(base_model)
-            if predecessor and predecessor in self.products_df['base_model'].unique():
-                demand = self.sales_history[(self.sales_history['base_model'] == predecessor) & (self.sales_history['transaction_date'] < prediction_date) & (self.sales_history['transaction_date'] >= prediction_date - timedelta(days=7))].shape[0]
-        return demand
-
-    def predict(self, unit_id: int, prediction_date_str: str):
-        prediction_date = pd.to_datetime(prediction_date_str)
-        unit_info = self.inventory_df[self.inventory_df['unit_id'] == unit_id]
-        if unit_info.empty: return {"error": f"Unit ID {unit_id} not found."}
-        full_details = pd.merge(unit_info, self.products_df, on='product_id').iloc[0]
-        
-        # This is the same logic as the training script
-        features = {
-            'original_msrp': full_details['original_msrp'], 
-            'storage_gb': full_details['storage_gb'], 
-            'grade': full_details['grade'], 
-            'model_tier': full_details['model_tier'], 
-            'base_model': full_details['base_model'], 
-            'days_since_model_release': (prediction_date - full_details['release_date']).days, 
-            'days_since_successor_release': (prediction_date - full_details['successor_release_date']).days if pd.notna(full_details['successor_release_date']) else -999, 
-            'market_demand_7_days': self._get_live_market_demand(full_details['base_model'], prediction_date),
-            'month_of_year': prediction_date.month,
-            'is_holiday_season': 1 if prediction_date.month in [11, 12] else 0
-        }
-        features_processed = self.pipeline['preprocessor'].transform(pd.DataFrame([features]))
-        models = self.pipeline['models']
-        price_prediction = {name: round(model.predict(features_processed)[0], 2) for name, model in models.items()}
-        return {
-            "unit_id": unit_id, "model_name": full_details['model_name'], "status": full_details['status'], "days_in_inventory": (prediction_date - full_details['acquisition_date']).days, "acquisition_date": full_details['acquisition_date'].strftime('%Y-%m-%d'), "acquisition_price": full_details['acquisition_price'], "predicted_selling_price_range": price_prediction
-        }
 
 class Recommender:
     """Uses pre-built recommendation data to provide accessory suggestions."""
@@ -239,552 +66,297 @@ class Recommender:
 
         return list(scores_df.sort_values(by='final_score', ascending=False).head(top_n).index)
 
-
-# 4. FLASK APP INITIALIZATION & ENDPOINTS
-# ==============================================================================
 app = Flask(__name__)
 CORS(app)
 db_engine = get_db_engine()
 
-# --- Load Predictors and Data at Startup ---
 try:
-    print("--- Initializing Predictor Classes and Loading Data from DB ---")
+    print("--- Initializing: Loading Data and Pre-trained Pipelines ---")
     products_df_global = pd.read_sql("SELECT * FROM products", db_engine)
-    products_df_global['release_date'] = pd.to_datetime(products_df_global['release_date'])
-    inventory_df_global = pd.read_sql("SELECT * FROM inventory_units", db_engine)
-    transactions_df_global = pd.read_sql("SELECT * FROM transactions", db_engine)
+    products_df_global['base_model'] = products_df_global['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
+    
     stores_df_global = pd.read_sql("SELECT * FROM stores", db_engine)
-    price_predictor = PricePredictor('models/price_model.joblib', products_df_global)
-    dynamic_price_predictor = DynamicPricePredictor('models/dynamic_selling_price_pipeline.joblib', products_df_global, inventory_df_global, transactions_df_global)
-    velocity_predictor = AdvancedVelocityPredictor('models/velocity_model_advanced.joblib', products_df_global)
+    
+    price_model_artifact = joblib.load('models/price_model_pipeline.joblib')
+    velocity_model_artifact = joblib.load('models/velocity_model_pipeline.joblib')
+    dynamic_price_artifact = joblib.load('models/dynamic_selling_price_pipeline.joblib')
+
     recommender = Recommender('models/recommendation_data.joblib', products_df_global)
     discontinuation_list_global = joblib.load('models/discontinuation_list.joblib')
     discontinuation_id_set = {item['product_id'] for item in discontinuation_list_global}
-    print("--- All predictors and data loaded successfully. API is ready. ---")
+    
+    print("--- All pipelines and data loaded successfully. API is ready. ---")
+
 except Exception as e:
-    print(f"FATAL ERROR: Failed to initialize predictors or load data. Details: {e}")
-    price_predictor, dynamic_price_predictor, velocity_predictor, recommender = None, None, None, None
-    products_df_global, inventory_df_global, stores_df_global, discontinuation_list_global = None, None, None, None
-    discontinuation_id_set = set()
+    print(f"FATAL ERROR: Failed to initialize. Details: {e}")
+    price_model_artifact = velocity_model_artifact = dynamic_price_artifact = None
+    recommender = discontinuation_list_global = discontinuation_id_set = None
+
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
-    if products_df_global is None:
-        return jsonify({"error": "Products data not loaded"}), 500
-    try:
-        phone_models = products_df_global[products_df_global['product_type'] == 'Used Phone']['model_name'].unique().tolist()
-        return jsonify(sorted(phone_models))
-    except Exception as e:
-        return jsonify({"error": f"Could not load products: {e}"}), 500
+
+    phone_models = products_df_global[products_df_global['product_type'] == 'Used Phone']['model_name'].unique().tolist()
+
+    return jsonify(sorted(phone_models))
 
 @app.route('/api/stores', methods=['GET'])
 def get_stores():
-    if stores_df_global is None:
-        return jsonify({"error": "Stores data not loaded"}), 500
-    try:
-        physical_stores = stores_df_global[stores_df_global['store_name'] != 'Online Store']
-        stores_list = physical_stores[['store_id', 'store_name']].to_dict('records')
-        return jsonify(sorted(stores_list, key=lambda x: x['store_name']))
-    except Exception as e:
-        return jsonify({"error": f"Could not load stores: {e}"}), 500
 
+    physical_stores = stores_df_global[stores_df_global['store_name'] != 'Online Store']
+    stores_list = physical_stores[['store_id', 'store_name']].to_dict('records')
+
+    return jsonify(sorted(stores_list, key=lambda x: x['store_name']))
 
 @app.route('/api/appraise/buy', methods=['POST'])
 def appraise_buy():
-    if not all([price_predictor, velocity_predictor, dynamic_price_predictor]):
+
+    if not all([price_model_artifact, velocity_model_artifact, dynamic_price_artifact]):
+
         return jsonify({"error": "Predictor models not loaded"}), 500
 
     data = request.get_json()
     model_name = data.get('model_name')
     grade = data.get('grade')
-    desired_profit = data.get('desired_profit', 0)
+    desired_profit = float(data.get('desired_profit', 0))
 
-    if not model_name or not grade:
-        return jsonify({"error": "model_name and grade are required"}), 400
-
-    date_str = datetime.now().strftime('%Y-%m-%d')
+    phone_info = products_df_global[products_df_global['model_name'] == model_name]
     
-    try:
-        # --- FIX: Pass the date string to the predictor ---
-        historical_buy_result = price_predictor.predict(model_name, grade, date_str)
-        if "error" in historical_buy_result: return jsonify(historical_buy_result), 404
-
-        velocity_result = velocity_predictor.predict(model_name, grade)
-        if "error" in velocity_result: return jsonify(velocity_result), 404
-        velocity_reason = velocity_result.get("velocity_reason")
-
-        # --- FIX: Use the dynamic price predictor's own method, which now handles features correctly ---
-        # We simulate a "dummy" unit_id=0 and prediction_date to get a forward-looking sale price
-        # The dynamic_price_predictor.predict method is now self-contained
-        # To do this, we need to create a temporary dataframe for prediction
-        appraisal_date = pd.to_datetime(date_str)
-        phone_details_df = dynamic_price_predictor.products_df[dynamic_price_predictor.products_df['model_name'] == model_name]
-        if phone_details_df.empty: return jsonify({"error": f"Model '{model_name}' not found for selling price."}), 404
+    if phone_info.empty:
+        return jsonify({"error": f"Model '{model_name}' not found."}), 404
         
-        full_details = phone_details_df.iloc[0]
-        
-        # This is the same logic as the training script
-        features = {
-            'original_msrp': full_details['original_msrp'], 
-            'storage_gb': full_details['storage_gb'], 
-            'grade': grade,
-            'model_tier': full_details['model_tier'], 
-            'base_model': full_details['base_model'],
-            'days_since_model_release': (appraisal_date - full_details['release_date']).days,
-            'days_since_successor_release': (appraisal_date - full_details['successor_release_date']).days if pd.notna(full_details['successor_release_date']) else -999,
-            'market_demand_7_days': dynamic_price_predictor._get_live_market_demand(full_details['base_model'], appraisal_date),
-            'month_of_year': appraisal_date.month,
-            'is_holiday_season': 1 if appraisal_date.month in [11, 12] else 0
-        }
-        features_processed = dynamic_price_predictor.pipeline['preprocessor'].transform(pd.DataFrame([features]))
-        d_models = dynamic_price_predictor.pipeline['models']
-        selling_price_prediction = {name: round(model.predict(features_processed)[0], 2) for name, model in d_models.items()}
+    appraisal_df = pd.DataFrame([{
+        'product_id': phone_info.iloc[0]['product_id'],
+        'model_name': model_name,
+        'base_model': phone_info.iloc[0]['base_model'],
+        'model_tier': phone_info.iloc[0]['model_tier'],
+        'storage_gb': phone_info.iloc[0]['storage_gb'],
+        'original_msrp': phone_info.iloc[0]['original_msrp'],
+        'grade': grade,
+        'release_date': phone_info.iloc[0]['release_date'],
+        'successor_release_date': phone_info.iloc[0]['successor_release_date'],
+        'acquisition_date': datetime.now(),
+        'transaction_date': datetime.now()
+    }])
 
-        profit_target_range = {
-            "low": selling_price_prediction.get('low_liquidate_price', 0) - float(desired_profit),
-            "median": selling_price_prediction.get('median_fair_market_price', 0) - float(desired_profit),
-            "high": selling_price_prediction.get('high_start_price', 0) - float(desired_profit),
-        }
+    price_predictions = {
+        name: round(pipe.predict(appraisal_df)[0], 2)
+        for name, pipe in price_model_artifact['models'].items()
+    }
+    
+    velocity_prediction = velocity_model_artifact['pipeline'].predict(appraisal_df)[0]
+    
+    selling_price_predictions = {
+        name: round(pipe.predict(appraisal_df)[0], 2)
+        for name, pipe in dynamic_price_artifact['models'].items()
+    }
 
-        market_alert = False
-        historical_median_buy = historical_buy_result.get("predicted_price_range", {}).get("median", 0)
-        if historical_median_buy > profit_target_range["high"]:
-            market_alert = True
+    profit_target_range = {
+        "low": selling_price_predictions.get('low_liquidate_price', 0) - desired_profit,
+        "median": selling_price_predictions.get('median_fair_market_price', 0) - desired_profit,
+        "high": selling_price_predictions.get('high_start_price', 0) - desired_profit,
+    }
+    
+    market_alert = bool(price_predictions.get("median", 0) > profit_target_range["high"])
 
-        response = {
-            "model_appraised": historical_buy_result.get("model_appraised"),
-            "grade": historical_buy_result.get("grade"),
-            "historically_based_buy_price": historical_buy_result.get("predicted_price_range"),
-            "predicted_sales_velocity": velocity_result.get("predicted_sales_velocity"),
-            "velocity_reason": velocity_reason,
-            "predicted_selling_price_range": selling_price_prediction,
-            "profit_targeted_buy_price_range": {k: round(v, 2) for k, v in profit_target_range.items()},
-            "market_alert": market_alert
-        }
-        return jsonify(response)
-
-    except Exception as e:
-        # Add more detailed error logging for debugging
-        import traceback
-        print(f"Error in /api/appraise/buy: {e}")
-        traceback.print_exc()
-        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+    return jsonify({
+        "model_appraised": model_name,
+        "grade": grade,
+        "historically_based_buy_price": price_predictions,
+        "predicted_sales_velocity": str(velocity_prediction),
+        "predicted_selling_price_range": selling_price_predictions,
+        "profit_targeted_buy_price_range": {k: round(v, 2) for k, v in profit_target_range.items()},
+        "market_alert": market_alert
+    })
 
 @app.route('/api/inventory/buy', methods=['POST'])
 def buy_inventory():
+
     data = request.get_json()
-    model_name = data.get('model_name')
-    grade = data.get('grade')
-    store_id = data.get('store_id')
-    acquisition_price = data.get('acquisition_price')
+    model_name, grade, store_id, acquisition_price = data.get('model_name'), data.get('grade'), data.get('store_id'), data.get('acquisition_price')
 
     if not all([model_name, grade, store_id, acquisition_price]):
-        return jsonify({"error": "model_name, grade, store_id, and acquisition_price are required"}), 400
+        return jsonify({"error": "All fields are required"}), 400
 
     try:
         product_details = products_df_global[products_df_global['model_name'] == model_name].iloc[0]
         product_id = product_details['product_id']
-        release_date = product_details['release_date']
-        
+        release_date = pd.to_datetime(product_details['release_date'])
         acquisition_date = datetime.now()
         age_at_acquisition = (acquisition_date - release_date).days
         
         with db_engine.connect() as connection:
             transaction = connection.begin()
             try:
-                max_unit_id_query = text("SELECT MAX(unit_id) FROM inventory_units")
-                max_unit_id_result = connection.execute(max_unit_id_query).scalar()
+                max_unit_id_result = connection.execute(text("SELECT MAX(unit_id) FROM inventory_units")).scalar()
                 new_unit_id = (max_unit_id_result or 0) + 1
-
                 insert_query = text("""
-                    INSERT INTO inventory_units 
-                    (unit_id, product_id, store_id, acquisition_date, grade, age_at_acquisition_days, acquisition_price, status)
-                    VALUES 
-                    (:unit_id, :product_id, :store_id, :acquisition_date, :grade, :age_at_acquisition_days, :acquisition_price, 'In Stock')
+                    INSERT INTO inventory_units (unit_id, product_id, store_id, acquisition_date, grade, age_at_acquisition_days, acquisition_price, status)
+                    VALUES (:unit_id, :product_id, :store_id, :acquisition_date, :grade, :age_at_acquisition_days, :acquisition_price, 'In Stock')
                 """)
-                
                 connection.execute(insert_query, {
-                    "unit_id": new_unit_id,
-                    "product_id": int(product_id),
-                    "store_id": int(store_id),
-                    "acquisition_date": acquisition_date.strftime('%Y-%m-%d'),
-                    "grade": grade,
-                    "age_at_acquisition_days": age_at_acquisition,
-                    "acquisition_price": float(acquisition_price)
+                    "unit_id": new_unit_id, "product_id": int(product_id), "store_id": int(store_id),
+                    "acquisition_date": acquisition_date.strftime('%Y-%m-%d'), "grade": grade,
+                    "age_at_acquisition_days": age_at_acquisition, "acquisition_price": float(acquisition_price)
                 })
-                
                 transaction.commit()
-                
-                global inventory_df_global
-                new_record = pd.DataFrame([{
-                    "unit_id": new_unit_id,
-                    "product_id": int(product_id),
-                    "store_id": int(store_id),
-                    "acquisition_date": acquisition_date,
-                    "grade": grade,
-                    "age_at_acquisition_days": age_at_acquisition,
-                    "acquisition_price": float(acquisition_price),
-                    "status": "In Stock"
-                }])
-                inventory_df_global = pd.concat([inventory_df_global, new_record], ignore_index=True)
 
                 return jsonify({"success": True, "unit_id": new_unit_id})
-
+            
             except Exception as e:
                 transaction.rollback()
-                print(f"Database transaction failed: {e}")
                 return jsonify({"error": f"Database error: {e}"}), 500
-
+            
     except IndexError:
         return jsonify({"error": f"Model '{model_name}' not found."}), 404
+    
     except Exception as e:
-        print(f"An error occurred in /api/inventory/buy: {e}")
         return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
 
-
-@app.route('/api/inventory/combined', methods=['GET'])
-def get_combined_inventory():
-    try:
-        phone_query = text("""
-            SELECT i.unit_id, i.grade, i.acquisition_date, p.model_name, s.store_name, i.store_id
-            FROM inventory_units i
-            JOIN products p ON i.product_id = p.product_id
-            JOIN stores s ON i.store_id = s.store_id
-            WHERE i.status = 'In Stock'
-        """)
-        accessory_query = text("""
-            SELECT ai.product_id, ai.quantity, p.model_name, s.store_name, ai.store_id
-            FROM accessory_inventory ai
-            JOIN products p ON ai.product_id = p.product_id
-            JOIN stores s ON ai.store_id = s.store_id
-            WHERE ai.quantity > 0
-        """)
-        
-        with db_engine.connect() as connection:
-            phones_df = pd.read_sql(phone_query, connection)
-            accessories_df = pd.read_sql(accessory_query, connection)
-            
-        phones_df['acquisition_date'] = pd.to_datetime(phones_df['acquisition_date']).dt.strftime('%Y-%m-%d')
-        
-        stores_to_display = stores_df_global[stores_df_global['store_name'] != 'Online Store']
-        
-        response_data = {store_name: {
-            "summary": {"phone_units": 0, "accessory_types": 0},
-            "phones": [],
-            "accessories": []
-        } for store_name in stores_to_display['store_name'].unique()}
-
-        if not phones_df.empty:
-            phones_list = phones_df.to_dict('records')
-            for phone in phones_list:
-                prediction = velocity_predictor.predict(phone['model_name'], phone['grade'])
-                phone['velocity_label'] = prediction.get('predicted_sales_velocity', 'Unknown')
-            
-            phones_df_enriched = pd.DataFrame(phones_list)
-            grouped_phones = phones_df_enriched.groupby('store_name')
-            for store_name, group_df in grouped_phones:
-                if store_name in response_data:
-                    response_data[store_name]['phones'] = group_df.to_dict('records')
-                    response_data[store_name]['summary']['phone_units'] = len(group_df)
-
-        if not accessories_df.empty:
-            accessories_list = accessories_df.to_dict('records')
-            for acc in accessories_list:
-                if acc['product_id'] in discontinuation_id_set:
-                    acc['discontinuation_label'] = 'Discontinuation Alert'
-            
-            accessories_df_enriched = pd.DataFrame(accessories_list)
-            
-            accessories_df_enriched.replace({np.nan: None}, inplace=True)
-            
-            grouped_accessories = accessories_df_enriched.groupby('store_name')
-            for store_name, group_df in grouped_accessories:
-                 if store_name in response_data:
-                    response_data[store_name]['accessories'] = group_df.to_dict('records')
-                    response_data[store_name]['summary']['accessory_types'] = len(group_df)
-        
-        return jsonify(response_data)
-
-    except Exception as e:
-        print(f"Error in /api/inventory/combined: {e}")
-        return jsonify({"error": "Could not load combined inventory"}), 500
-    
 
 @app.route('/api/inventory/price', methods=['POST'])
 def predict_dynamic_sell_price():
-    if not dynamic_price_predictor:
+
+    if not dynamic_price_artifact:
         return jsonify({"error": "Dynamic price predictor not loaded"}), 500
+        
     data = request.get_json()
-    unit_id = data.get('unit_id')
-    if not unit_id: return jsonify({"error": "unit_id is required"}), 400
-    date_str = datetime.now().strftime('%Y-%m-%d')
+    unit_id = int(data.get('unit_id'))
+
+    with db_engine.connect() as conn:
+        unit_info = pd.read_sql(text("SELECT * FROM inventory_units WHERE unit_id = :uid"), conn, params={"uid": unit_id})
+    
+    if unit_info.empty:
+        return jsonify({"error": f"Unit ID {unit_id} not found."}), 404
+        
+    full_details = pd.merge(unit_info, products_df_global, on='product_id')
+    full_details['transaction_date'] = datetime.now()
+
+    predictions = {
+        name: round(pipe.predict(full_details)[0], 2)
+        for name, pipe in dynamic_price_artifact['models'].items()
+    }
+    
+    unit_data = full_details.iloc[0].to_dict()
+    
+    response_data = {
+        "unit_id": int(unit_data['unit_id']),
+        "model_name": unit_data['model_name'],
+        "status": unit_data['status'],
+        "days_in_inventory": int((datetime.now() - pd.to_datetime(unit_data['acquisition_date'])).days) if pd.notna(unit_data['acquisition_date']) else None,
+        "acquisition_date": pd.to_datetime(unit_data['acquisition_date']).strftime('%Y-%m-%d') if pd.notna(unit_data['acquisition_date']) else None,
+        "acquisition_price": float(unit_data['acquisition_price']) if pd.notna(unit_data['acquisition_price']) else None,
+        "predicted_selling_price_range": predictions
+    }
+
+    return jsonify(response_data)
+
+@app.route('/api/inventory/combined', methods=['GET'])
+def get_combined_inventory():
+
     try:
-        dynamic_price_predictor.inventory_df = inventory_df_global.copy()
-        dynamic_price_predictor.inventory_df['acquisition_date'] = pd.to_datetime(dynamic_price_predictor.inventory_df['acquisition_date'])
-        result = dynamic_price_predictor.predict(int(unit_id), date_str)
-        if "error" in result: return jsonify(result), 404
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
-
-
-@app.route('/api/accessories/details/<int:product_id>', methods=['GET'])
-def get_accessory_details(product_id):
-    try:
-        accessory_info_query = text("SELECT model_name, original_msrp FROM products WHERE product_id = :pid")
-        compat_query = text("""
-            SELECT p.model_name
-            FROM accessory_compatibility ac
-            JOIN products p ON ac.phone_product_id = p.product_id
-            WHERE ac.accessory_product_id = :pid
-            ORDER BY p.release_date DESC;
-        """)
-
         with db_engine.connect() as connection:
-            accessory_info = connection.execute(accessory_info_query, {"pid": product_id}).fetchone()
-            if not accessory_info:
-                return jsonify({"error": "Accessory not found"}), 404
-            
-            compat_list = connection.execute(compat_query, {"pid": product_id}).fetchall()
-            compatible_phones = [row[0] for row in compat_list]
+            phones_df = pd.read_sql(text("""
+                SELECT i.unit_id, i.grade, i.acquisition_date, i.store_id, p.* FROM inventory_units i
+                JOIN products p ON i.product_id = p.product_id WHERE i.status = 'In Stock'
+            """), connection)
+            accessories_df = pd.read_sql(text("""
+                SELECT ai.product_id, ai.quantity, p.model_name, s.store_name, ai.store_id FROM accessory_inventory ai
+                JOIN products p ON ai.product_id = p.product_id JOIN stores s ON ai.store_id = s.store_id
+                WHERE ai.quantity > 0
+            """), connection)
 
-        response = {
-            "product_id": product_id,
-            "model_name": accessory_info[0],
-            "original_msrp": accessory_info[1],
-            "compatible_phones": compatible_phones
-        }
-        return jsonify(response)
+        if not phones_df.empty:
+            phones_df['base_model'] = phones_df['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
+            phones_df['velocity_label'] = velocity_model_artifact['pipeline'].predict(phones_df)
+        
+        if not accessories_df.empty:
+            accessories_df['discontinuation_label'] = accessories_df['product_id'].apply(
+                lambda x: 'Discontinuation Alert' if x in discontinuation_id_set else None)
 
+        response_data = {s['store_name']: {"summary": {}, "phones": [], "accessories": []} for _, s in stores_df_global[stores_df_global['location_type'] == 'Physical Store'].iterrows()}
+
+        for store_name, group in accessories_df.groupby('store_name'):
+            if store_name in response_data:
+                response_data[store_name]['accessories'] = group.to_dict('records')
+        
+        phones_with_stores = pd.merge(phones_df, stores_df_global[['store_id', 'store_name']], on='store_id')
+
+        for store_name, group in phones_with_stores.groupby('store_name'):
+            if store_name in response_data:
+                clean_group = group.replace({np.nan: None, pd.NaT: None})
+                response_data[store_name]['phones'] = clean_group.to_dict('records')
+        
+        for store in response_data:
+            response_data[store]['summary']['phone_units'] = len(response_data[store]['phones'])
+            response_data[store]['summary']['accessory_types'] = len(response_data[store]['accessories'])
+
+        return jsonify(response_data)
+    
     except Exception as e:
-        print(f"Error getting accessory details for ID {product_id}: {e}")
-        return jsonify({"error": "Could not retrieve accessory details"}), 500
+        traceback.print_exc()
 
-@app.route('/api/transactions/history', methods=['GET'])
-def get_transaction_history():
-    try:
-        base_query = """
-            -- Phone Sales
-            SELECT
-                t.transaction_id,
-                t.transaction_date,
-                p.model_name,
-                p.product_type,
-                i.grade,
-                t.final_sale_price,
-                i.acquisition_price AS cost,
-                s.store_name,
-                s.store_id,
-                i.acquisition_date
-            FROM transactions t
-            JOIN inventory_units i ON t.unit_id = i.unit_id
-            JOIN products p ON i.product_id = p.product_id
-            JOIN stores s ON i.store_id = s.store_id
-            WHERE p.product_type = 'Used Phone'
-
-            UNION ALL
-
-            -- Accessory Sales
-            SELECT
-                t.transaction_id,
-                t.transaction_date,
-                p.model_name,
-                p.product_type,
-                NULL AS grade,
-                t.final_sale_price,
-                p.original_msrp AS cost,
-                s.store_name,
-                s.store_id,
-                NULL as acquisition_date
-            FROM transactions t
-            JOIN products p ON t.product_id = p.product_id
-            JOIN stores s ON t.store_id = s.store_id
-            WHERE p.product_type = 'Accessory'
-        """
-        
-        with db_engine.connect() as connection:
-            df = pd.read_sql_query(text(base_query), connection)
-
-        df = df.sort_values('transaction_id', ascending=False)
-        
-        df['transaction_date'] = pd.to_datetime(df['transaction_date'])
-        df['acquisition_date'] = pd.to_datetime(df['acquisition_date'], errors='coerce')
-        
-        if request.args.get('model_name'):
-            df = df[df['model_name'] == request.args.get('model_name')]
-        if request.args.get('grade'):
-            df = df[df['grade'] == request.args.get('grade')]
-        if request.args.get('store_id'):
-            df = df[df['store_id'] == int(request.args.get('store_id'))]
-        if request.args.get('start_date'):
-            df = df[df['transaction_date'] >= pd.to_datetime(request.args.get('start_date'))]
-        if request.args.get('end_date'):
-            df = df[df['transaction_date'] <= pd.to_datetime(request.args.get('end_date'))]
-
-        if df.empty:
-            return jsonify({"summary": {}, "transactions": []})
-
-        df['profit_loss'] = df['final_sale_price'] - df['cost']
-        df['days_in_stock'] = (df['transaction_date'] - df['acquisition_date']).dt.days
-
-        phones_df = df[df['product_type'] == 'Used Phone'].copy()
-        
-        summary = {
-            "total_revenue": df['final_sale_price'].sum(),
-            "total_cost": df['cost'].sum(),
-            "total_profit": df['profit_loss'].sum(),
-            "total_items_sold": len(df),
-            "average_profit_per_item": df['profit_loss'].mean(),
-            "average_days_in_stock": phones_df['days_in_stock'].mean()
-        }
-
-        df['transaction_date'] = df['transaction_date'].dt.strftime('%Y-%m-%d')
-        df.replace({np.nan: None, pd.NaT: None, np.inf: None, -np.inf: None}, inplace=True)
-        transactions = df.to_dict('records')
-        
-        return jsonify({"summary": summary, "transactions": transactions})
-
-    except Exception as e:
-        print(f"Error in /api/transactions/history: {e}")
-        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
-
+        return jsonify({"error": f"Could not load combined inventory: {e}"}), 500
 
 @app.route('/api/recommend/accessories', methods=['POST'])
 def get_accessory_recommendations():
-    if not recommender or products_df_global is None:
-        return jsonify({"error": "Recommender system not loaded"}), 500
+
     data = request.get_json()
     phone_model_name = data.get('phone_model_name')
-    if not phone_model_name: return jsonify({"error": "phone_model_name is required"}), 400
-    try:
-        recommended_ids = recommender.recommend_accessories(phone_model_name=phone_model_name, top_n=3)
-        if not recommended_ids: return jsonify([])
-        recommended_products = products_df_global[products_df_global['product_id'].isin(recommended_ids)]
-        recommended_products = recommended_products.set_index('product_id').loc[recommended_ids].reset_index()
-        recommended_products = recommended_products.replace({np.nan: None})
-        return jsonify(recommended_products.to_dict('records'))
-    except Exception as e:
-        return jsonify({"error": f"Could not generate recommendations: {e}"}), 500
+    recommended_ids = recommender.recommend_accessories(phone_model_name=phone_model_name, top_n=3)
+    if not recommended_ids: return jsonify([])
+    
+    recommended_products = products_df_global[products_df_global['product_id'].isin(recommended_ids)]
+    ordered_products = recommended_products.set_index('product_id').loc[recommended_ids].reset_index()
+    
+
+    clean_products = ordered_products.replace({np.nan: None, pd.NaT: None})
+    
+    return jsonify(clean_products.to_dict('records'))
+
 
 @app.route('/api/inventory/discontinuation_alerts', methods=['GET'])
 def get_discontinuation_list():
-    if discontinuation_list_global is None:
-        return jsonify({"error": "Discontinuation list not loaded"}), 500
     return jsonify(discontinuation_list_global)
+
 
 @app.route('/api/demand_forecast', methods=['POST'])
 def get_product_demand_forecast():
+
     data = request.get_json()
-    category_value, periods = data.get('product_name'), data.get('periods', 90)
-    if not category_value: return jsonify({"error": "product_name is required"}), 400
-    safe_category_value = "".join(c for c in category_value if c.isalnum())
-    model_path = os.path.join('models', f'demand_forecast_{safe_category_value}.joblib')
+    product_name, periods = data.get('product_name'), data.get('periods', 90)
+    if not product_name: return jsonify({"error": "product_name is required"}), 400
+    
+    safe_name = "".join(c for c in product_name if c.isalnum())
+    model_path = os.path.join('models', f'demand_forecast_{safe_name}.joblib')
+    
     try:
         model_package = joblib.load(model_path)
-        model, release_date, successor_date, base_cap = model_package['model'], model_package['release_date'], model_package['successor_date'], model_package['base_cap']
     except FileNotFoundError:
-        return jsonify({"error": f"Forecast model for '{category_value}' not found"}), 404
-    except Exception as e:
-        return jsonify({"error": f"Could not load forecast model: {e}"}), 500
-    try:
-        future_df = model.make_future_dataframe(periods=int(periods))
-        def calculate_cap(row_date):
-            days_since_release = (row_date - release_date).days
-            decay_factor = 1 - (days_since_release / (365 * 2))
-            if pd.notna(successor_date) and row_date > successor_date:
-                days_after_successor = (row_date - successor_date).days
-                successor_decay = 0.5 - (days_after_successor / (365 * 1))
-                decay_factor = min(decay_factor, successor_decay)
-            return max(0.01, base_cap * decay_factor)
-        future_df['cap'] = future_df['ds'].apply(calculate_cap)
-        future_df['floor'] = 0
-        forecast_df = model.predict(future_df)
-        total_forecast = forecast_df['yhat'][-int(periods):].sum()
-
-        # ADD THIS CHECK: If the total sum is negative, set it to 0
-        if total_forecast < 0:
-            total_forecast = 0
-
-        daily_data = forecast_df[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].tail(int(periods)).copy()
-
-        daily_data.rename(columns={'ds': 'date', 'yhat': 'prediction', 'yhat_lower': 'lower_bound', 'yhat_upper': 'upper_bound'}, inplace=True)
-        daily_data['date'] = daily_data['date'].dt.strftime('%Y-%m-%d')
-
-        response_data = {
-            "daily_data": daily_data.to_dict('records'),
-            "total_forecast": int(round(total_forecast))
-        }
-        return jsonify(response_data)
-    except Exception as e:
-        return jsonify({"error": f"Failed to generate forecast: {e}"}), 500
-
-@app.route('/api/recommend/accessories/instock', methods=['POST'])
-def get_instock_accessory_recommendations():
-    if not recommender:
-        return jsonify({"error": "Recommender system not loaded"}), 500
+        return jsonify({"error": f"Forecast model for '{product_name}' not found"}), 404
+    
+    model, release_date, successor_date, base_cap = model_package.values()
+    future_df = model.make_future_dataframe(periods=int(periods))
+    
+    def calculate_cap(row_date):
+        decay = 1 - ((row_date - release_date).days / 730)
+        if pd.notna(successor_date) and row_date > successor_date:
+            decay = min(decay, 0.5 - ((row_date - successor_date).days / 365))
+        return max(0.01, base_cap * decay)
         
-    data = request.get_json()
-    phone_model_name = data.get('phone_model_name')
-    store_id = data.get('store_id')
+    future_df['cap'], future_df['floor'] = future_df['ds'].apply(calculate_cap), 0
+    forecast = model.predict(future_df).tail(int(periods))
+    total_forecast = forecast['yhat'].sum()
 
-    if not phone_model_name or not store_id:
-        return jsonify({"error": "phone_model_name and store_id are required"}), 400
-
-    try:
-        recommended_ids = recommender.recommend_accessories(phone_model_name=phone_model_name, top_n=5)
-        if not recommended_ids:
-            return jsonify([])
-        
-        placeholders = ", ".join(f":p{i}" for i in range(len(recommended_ids)))
-        instock_query_sql = f"SELECT product_id FROM accessory_inventory WHERE store_id = :sid AND quantity > 0 AND product_id IN ({placeholders})"
-        params_dict = {"sid": int(store_id)}
-        for i, pid in enumerate(recommended_ids):
-            params_dict[f"p{i}"] = pid
-
-        with db_engine.connect() as connection:
-            instock_result = connection.execute(text(instock_query_sql), params_dict).fetchall()
-        
-        instock_ids = {row[0] for row in instock_result}
-
-        final_recommendations = [pid for pid in recommended_ids if pid in instock_ids][:3]
-        if not final_recommendations:
-            return jsonify([])
-
-        recommended_products = products_df_global[products_df_global['product_id'].isin(final_recommendations)]
-        if not recommended_products.empty:
-            recommended_products = recommended_products.set_index('product_id').loc[final_recommendations].reset_index()
-        
-        recommended_products.replace({np.nan: None}, inplace=True)
-        
-        return jsonify(recommended_products.to_dict('records'))
-    except Exception as e:
-        return jsonify({"error": f"Could not generate in-stock recommendations: {e}"}), 500
-
-@app.route('/api/inventory/accessories/<int:store_id>', methods=['GET'])
-def get_all_store_accessories(store_id):
-    try:
-        query = text("""
-            SELECT p.product_id, p.model_name, p.original_msrp
-            FROM accessory_inventory ai
-            JOIN products p ON ai.product_id = p.product_id
-            WHERE ai.store_id = :sid AND ai.quantity > 0
-            ORDER BY p.model_name;
-        """)
-        with db_engine.connect() as connection:
-            results = connection.execute(query, {"sid": store_id}).fetchall()
-        
-        accessories = [{"product_id": row[0], "model_name": row[1], "price": row[2]} for row in results]
-        return jsonify(accessories)
-    except Exception as e:
-        print(f"Error getting accessories for store {store_id}: {e}")
-        return jsonify({"error": f"Could not retrieve accessories for store: {e}"}), 500
+    return jsonify({
+        "daily_data": forecast[['ds', 'yhat', 'yhat_lower', 'yhat_upper']].rename(columns={'ds': 'date', 'yhat': 'prediction', 'yhat_lower': 'lower_bound', 'yhat_upper': 'upper_bound'}).to_dict('records'),
+        "total_forecast": int(round(max(0, total_forecast)))
+    })
 
 @app.route('/api/checkout', methods=['POST'])
 def process_checkout():
     data = request.get_json()
-    cart_phone = data.get('phone')
-    cart_accessories = data.get('accessories', [])
-    store_id = data.get('storeId')
+    cart_phone, cart_accessories, store_id = data.get('phone'), data.get('accessories', []), data.get('storeId')
 
     if not cart_phone or not store_id:
         return jsonify({"error": "A phone and store ID are required for checkout."}), 400
@@ -792,35 +364,118 @@ def process_checkout():
     with db_engine.connect() as connection:
         transaction = connection.begin()
         try:
-            max_txn_id_result = connection.execute(text("SELECT MAX(transaction_id) FROM transactions")).scalar()
-            new_txn_id = (max_txn_id_result or 0) + 1
-            
+            max_txn_id = (connection.execute(text("SELECT MAX(transaction_id) FROM transactions")).scalar() or 0) + 1
             txn_date = datetime.now().strftime('%Y-%m-%d')
-
-            phone_product_id = connection.execute(text("SELECT product_id FROM inventory_units WHERE unit_id = :uid"), {"uid": cart_phone['unit_id']}).scalar()
+            phone_pid = connection.execute(text("SELECT product_id FROM inventory_units WHERE unit_id = :uid"), {"uid": cart_phone['unit_id']}).scalar()
             
-            phone_txn_sql = text("INSERT INTO transactions (transaction_id, transaction_date, unit_id, product_id, store_id, final_sale_price) VALUES (:tid, :tdate, :uid, :pid, :sid, :price)")
-            connection.execute(phone_txn_sql, {"tid": new_txn_id, "tdate": txn_date, "uid": cart_phone['unit_id'], "pid": phone_product_id, "sid": store_id, "price": cart_phone['price']})
-            
-            update_phone_sql = text("UPDATE inventory_units SET status = 'Sold' WHERE unit_id = :uid")
-            connection.execute(update_phone_sql, {"uid": cart_phone['unit_id']})
+            connection.execute(text("INSERT INTO transactions (transaction_id, transaction_date, unit_id, product_id, store_id, final_sale_price) VALUES (:tid, :tdate, :uid, :pid, :sid, :price)"), 
+                               {"tid": max_txn_id, "tdate": txn_date, "uid": cart_phone['unit_id'], "pid": int(phone_pid), "sid": store_id, "price": cart_phone['price']})
+            connection.execute(text("UPDATE inventory_units SET status = 'Sold' WHERE unit_id = :uid"), {"uid": cart_phone['unit_id']})
             
             for acc in cart_accessories:
-                acc_txn_sql = text("INSERT INTO transactions (transaction_id, transaction_date, product_id, store_id, final_sale_price) VALUES (:tid, :tdate, :pid, :sid, :price)")
-                connection.execute(acc_txn_sql, {"tid": new_txn_id, "tdate": txn_date, "pid": acc['product_id'], "sid": store_id, "price": acc['price']})
-
-                update_acc_sql = text("UPDATE accessory_inventory SET quantity = quantity - :qty WHERE product_id = :pid AND store_id = :sid")
-                connection.execute(update_acc_sql, {"qty": acc['quantity'], "pid": acc['product_id'], "sid": store_id})
-
+                connection.execute(text("INSERT INTO transactions (transaction_id, transaction_date, product_id, store_id, final_sale_price) VALUES (:tid, :tdate, :pid, :sid, :price)"),
+                                   {"tid": max_txn_id, "tdate": txn_date, "pid": acc['product_id'], "sid": store_id, "price": acc['price']})
+                connection.execute(text("UPDATE accessory_inventory SET quantity = quantity - :qty WHERE product_id = :pid AND store_id = :sid"),
+                                   {"qty": acc['quantity'], "pid": acc['product_id'], "sid": store_id})
             transaction.commit()
-            return jsonify({"success": True, "transaction_id": new_txn_id})
 
+            return jsonify({"success": True, "transaction_id": max_txn_id})
+        
         except Exception as e:
             transaction.rollback()
-            print(f"CHECKOUT FAILED: {e}")
+
             return jsonify({"error": f"An error occurred during checkout: {e}"}), 500
 
-# 5. MAIN EXECUTION BLOCK
-# ==============================================================================
+@app.route('/api/accessories/details/<int:product_id>', methods=['GET'])
+def get_accessory_details(product_id):
+
+    query = text("SELECT model_name, original_msrp FROM products WHERE product_id = :pid")
+    compat_query = text("""SELECT p.model_name FROM accessory_compatibility ac JOIN products p ON ac.phone_product_id = p.product_id
+                           WHERE ac.accessory_product_id = :pid ORDER BY p.release_date DESC;""")
+    
+    with db_engine.connect() as connection:
+        info = connection.execute(query, {"pid": product_id}).fetchone()
+        if not info: return jsonify({"error": "Accessory not found"}), 404
+        phones = [row[0] for row in connection.execute(compat_query, {"pid": product_id}).fetchall()]
+
+    return jsonify({"product_id": product_id, "model_name": info[0], "original_msrp": info[1], "compatible_phones": phones})
+
+@app.route('/api/transactions/history', methods=['GET'])
+def get_transaction_history():
+
+    try:
+        query = text("""
+            SELECT t.transaction_id, t.transaction_date, p.model_name, p.product_type, i.grade, t.final_sale_price,
+                   i.acquisition_price AS cost, s.store_name, s.store_id, i.acquisition_date
+            FROM transactions t JOIN inventory_units i ON t.unit_id = i.unit_id JOIN products p ON i.product_id = p.product_id
+            JOIN stores s ON i.store_id = s.store_id WHERE p.product_type = 'Used Phone'
+            UNION ALL
+            SELECT t.transaction_id, t.transaction_date, p.model_name, p.product_type, NULL AS grade, t.final_sale_price,
+                   p.original_msrp AS cost, s.store_name, s.store_id, NULL as acquisition_date
+            FROM transactions t JOIN products p ON t.product_id = p.product_id JOIN stores s ON t.store_id = s.store_id
+            WHERE p.product_type = 'Accessory'
+        """)
+        with db_engine.connect() as connection: df = pd.read_sql_query(query, connection)
+
+        df['transaction_date'] = pd.to_datetime(df['transaction_date'])
+        if request.args.get('start_date'): df = df[df['transaction_date'] >= pd.to_datetime(request.args.get('start_date'))]
+        if request.args.get('end_date'): df = df[df['transaction_date'] <= pd.to_datetime(request.args.get('end_date'))]
+        if request.args.get('model_name'): df = df[df['model_name'] == request.args.get('model_name')]
+        if request.args.get('grade'): df = df[df['grade'] == request.args.get('grade')]
+        if request.args.get('store_id'): df = df[df['store_id'] == int(request.args.get('store_id'))]
+
+        if df.empty: return jsonify({"summary": {}, "transactions": []})
+        
+        df['acquisition_date'] = pd.to_datetime(df['acquisition_date'], errors='coerce')
+        df['profit_loss'] = df['final_sale_price'] - df['cost']
+        df['days_in_stock'] = (df['transaction_date'] - df['acquisition_date']).dt.days
+        phones_df = df[df['product_type'] == 'Used Phone'].copy()
+        
+        summary = {
+            "total_revenue": float(df['final_sale_price'].sum()), "total_cost": float(df['cost'].sum()),
+            "total_profit": float(df['profit_loss'].sum()), "total_items_sold": int(len(df)),
+            "average_profit_per_item": float(df['profit_loss'].mean()), "average_days_in_stock": float(phones_df['days_in_stock'].mean())
+        }
+        
+        df['transaction_date'] = df['transaction_date'].dt.strftime('%Y-%m-%d')
+        df.replace({np.nan: None, pd.NaT: None, np.inf: None, -np.inf: None}, inplace=True)
+
+        return jsonify({"summary": summary, "transactions": df.to_dict('records')})
+    
+    except Exception as e:
+        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+
+@app.route('/api/recommend/accessories/instock', methods=['POST'])
+def get_instock_accessory_recommendations():
+
+    data = request.get_json()
+    phone_model_name, store_id = data.get('phone_model_name'), data.get('store_id')
+    recommended_ids = recommender.recommend_accessories(phone_model_name=phone_model_name, top_n=5)
+    if not recommended_ids: return jsonify([])
+    
+    placeholders = ", ".join([f":p{i}" for i in range(len(recommended_ids))])
+    params = {"sid": int(store_id), **{f"p{i}": pid for i, pid in enumerate(recommended_ids)}}
+    
+    with db_engine.connect() as connection:
+        instock_ids = {row[0] for row in connection.execute(text(f"SELECT product_id FROM accessory_inventory WHERE store_id = :sid AND quantity > 0 AND product_id IN ({placeholders})"), params).fetchall()}
+
+    final_recommendations = [pid for pid in recommended_ids if pid in instock_ids][:3]
+    if not final_recommendations: return jsonify([])
+
+    recommended_products = products_df_global[products_df_global['product_id'].isin(final_recommendations)]
+    ordered_products = recommended_products.set_index('product_id').loc[final_recommendations].reset_index()
+    clean_products = ordered_products.replace({np.nan: None, pd.NaT: None})
+
+    return jsonify(clean_products.to_dict('records'))
+
+@app.route('/api/inventory/accessories/<int:store_id>', methods=['GET'])
+def get_all_store_accessories(store_id):
+
+    query = text("SELECT p.product_id, p.model_name, p.original_msrp as price FROM accessory_inventory ai JOIN products p ON ai.product_id = p.product_id WHERE ai.store_id = :sid AND ai.quantity > 0 ORDER BY p.model_name;")
+    with db_engine.connect() as connection:
+        results = connection.execute(query, {"sid": store_id}).fetchall()
+        
+    return jsonify([dict(row._mapping) for row in results])
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

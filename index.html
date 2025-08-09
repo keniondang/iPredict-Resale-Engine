@@ -229,7 +229,6 @@
                                         <tbody id="history-table-body"></tbody>
                                     </table>
                                 </div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -306,7 +305,7 @@
                         <p id="summary-forecast-total" class="text-3xl font-bold text-indigo-600"></p>
                     </div>
                     <div class="bg-white p-6 rounded-xl shadow-sm">
-                         <h3 class="text-lg font-semibold mb-4 text-center">Predicted Daily Sales</h3>
+                         <h3 class="text-lg font-semibold mb-4 text-center">Predicted Weekly Sales</h3>
                          <div class="h-96 relative"><canvas id="forecast-chart"></canvas></div>
                     </div>
                 </div>
@@ -338,7 +337,6 @@
         let currentPurchaseInfo = {};
         let cart = { phone: null, accessories: [], storeId: null };
 
-        // --- Helper Functions ---
         const showLoader = (loaderId) => document.getElementById(loaderId).classList.remove('hidden');
         const hideLoader = (loaderId) => document.getElementById(loaderId).classList.add('hidden');
         
@@ -360,7 +358,6 @@
             }
         }
 
-        // --- Custom Modal Logic ---
         function showModal({ title, message, confirmText, cancelText, onConfirm, iconType = 'success' }) {
             const modal = document.getElementById('custom-modal');
             document.getElementById('modal-title').textContent = title;
@@ -374,7 +371,7 @@
             } else if (iconType === 'warning') {
                 iconDiv.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-yellow-100';
                 iconDiv.innerHTML = '<svg class="h-6 w-6 text-yellow-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>';
-            } else { // error
+            } else {
                  iconDiv.className = 'mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100';
                  iconDiv.innerHTML = '<svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>';
             }
@@ -393,7 +390,6 @@
             modal.classList.remove('hidden');
         }
 
-        // --- Live Clock ---
         function updateClock() {
             const now = new Date();
             const timeEl = document.getElementById('current-time');
@@ -404,7 +400,6 @@
             }
         }
 
-        // --- Tab Switching Logic ---
         document.getElementById('tabs').addEventListener('click', (e) => {
             if (e.target.matches('button')) { switchTab(e.target.dataset.tab); }
         });
@@ -422,7 +417,6 @@
             else if (tabId === 'history' && !document.getElementById('history-table-body').innerHTML.trim()) { loadTransactionHistory(); }
         }
 
-        // --- Populate Shared Dropdowns ---
         async function populatePhoneModels() {
             try {
                 const models = await apiFetch('/products');
@@ -451,7 +445,6 @@
             } catch (error) { console.error("Failed to populate stores", error); }
         }
 
-        // --- Appraisal & Purchase Logic ---
         document.getElementById('appraisal-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const model = document.getElementById('appraisal-model').value;
@@ -499,7 +492,6 @@
             });
         });
 
-        // --- Combined Inventory Logic ---
         async function loadCombinedInventory() {
             const accordionContainer = document.getElementById('inventory-accordion-container');
             showLoader('inventory-accordion-loader');
@@ -631,7 +623,6 @@
             }
         }
         
-        // --- Cart & Sale Logic ---
         function addSalePanelEventListeners() {
             document.getElementById('add-phone-to-cart-btn')?.addEventListener('click', addPhoneToCart);
             document.getElementById('recommended-accessories-list')?.addEventListener('click', (e) => {
@@ -640,7 +631,7 @@
             });
             document.getElementById('add-other-accessory-btn')?.addEventListener('click', addOtherAccessoryToCart);
             document.getElementById('checkout-btn')?.addEventListener('click', handleCheckout);
-            // ADDED: Listeners for the new buttons
+
             document.getElementById('reset-cart-btn')?.addEventListener('click', resetCart);
             document.getElementById('cart-items')?.addEventListener('click', (e) => {
                 const button = e.target.closest('[data-cart-action]');
@@ -652,7 +643,6 @@
             });
         }
 
-        // UPDATED: Now re-enables the phone button
         function resetCart() {
             cart = { phone: null, accessories: [], storeId: cart.storeId };
             const addPhoneBtn = document.getElementById('add-phone-to-cart-btn');
@@ -706,7 +696,6 @@
             select.selectedIndex = 0;
         }
         
-        // NEW: Handles all quantity updates and item additions
         function updateCartQuantity(productId, action, amount = 1, name = '', price = 0) {
             const accessoryIndex = cart.accessories.findIndex(a => a.product_id === productId);
 
@@ -725,7 +714,6 @@
             renderCart();
         }
 
-        // UPDATED: Renders the new cart item layout
         function renderCart() {
             const itemsDiv = document.getElementById('cart-items');
             const totalP = document.getElementById('cart-total');
@@ -812,7 +800,6 @@
             } finally { hideLoader('inventory-loader'); }
         }
 
-        // --- Transaction History Logic ---
         document.getElementById('history-filter-form').addEventListener('submit', async (e) => { e.preventDefault(); loadTransactionHistory(); });
         async function loadTransactionHistory() {
             showLoader('history-loader');
@@ -845,14 +832,12 @@
                 let tableHtml = '';
 
                 if(data.transactions && data.transactions.length > 0) {
-                    // NEW: Sort transactions by date (newest first), with transaction ID as a tie-breaker.
                     data.transactions.sort((a, b) => {
                         if (b.transaction_date > a.transaction_date) return 1;
                         if (b.transaction_date < a.transaction_date) return -1;
                         return b.transaction_id - a.transaction_id;
                     });
 
-                    // Group transactions by their ID
                     const groupedTransactions = {};
                     data.transactions.forEach(tx => {
                         if (!groupedTransactions[tx.transaction_id]) {
@@ -861,10 +846,8 @@
                         groupedTransactions[tx.transaction_id].push(tx);
                     });
 
-                    // Get the sorted list of transaction IDs from the sorted data
                     const sortedTxnIds = [...new Set(data.transactions.map(tx => tx.transaction_id))];
 
-                    // Iterate over each group to build the table
                     sortedTxnIds.forEach((txnId, index) => {
                         const group = groupedTransactions[txnId];
                         const bgColorClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50';
@@ -889,7 +872,6 @@
                             `;
                         }).join('');
                         
-                        // UPDATED: Changed the border style to be dotted
                         tableHtml += `<tbody class="${bgColorClass} border-b border-dotted border-gray-400">${groupRowsHtml}</tbody>`;
                     });
 
@@ -923,10 +905,29 @@
                 forecastChartInstance.destroy();
             }
             const dailyData = data.daily_data;
-            const labels = dailyData.map(d => d.date);
-            const predictions = dailyData.map(d => d.prediction);
-            const lowerBounds = dailyData.map(d => d.lower_bound);
-            const upperBounds = dailyData.map(d => d.upper_bound);
+
+            // Aggregate daily data into weekly data
+            const weeklyAggregates = {};
+            dailyData.forEach(d => {
+                const entryDate = new Date(d.date);
+                const dayOfWeek = entryDate.getUTCDay(); // Use UTC day to be consistent
+                const firstDayOfWeek = new Date(entryDate);
+                firstDayOfWeek.setUTCDate(entryDate.getUTCDate() - dayOfWeek);
+                const weekKey = firstDayOfWeek.toISOString().split('T')[0];
+
+                if (!weeklyAggregates[weekKey]) {
+                    weeklyAggregates[weekKey] = { prediction: 0, lower_bound: 0, upper_bound: 0 };
+                }
+                weeklyAggregates[weekKey].prediction += d.prediction;
+                weeklyAggregates[weekKey].lower_bound += d.lower_bound;
+                weeklyAggregates[weekKey].upper_bound += d.upper_bound;
+            });
+
+            const sortedWeeks = Object.keys(weeklyAggregates).sort();
+            const labels = sortedWeeks;
+            const predictions = sortedWeeks.map(week => weeklyAggregates[week].prediction);
+            const lowerBounds = sortedWeeks.map(week => weeklyAggregates[week].lower_bound);
+            const upperBounds = sortedWeeks.map(week => weeklyAggregates[week].upper_bound);
 
             const ctx = document.getElementById('forecast-chart').getContext('2d');
             forecastChartInstance = new Chart(ctx, {
@@ -943,15 +944,14 @@
                     }, {
                         label: 'Uncertainty Range',
                         data: upperBounds,
-                        fill: '-1', // Fill to the previous dataset (predictions)
+                        fill: '-1', 
                         backgroundColor: 'rgba(79, 70, 229, 0.2)',
                         borderColor: 'transparent',
                         pointRadius: 0,
                     }, {
-                        label: 'Lower Bound', // Not shown in legend, just for filling
+                        label: 'Lower Bound', 
                         data: lowerBounds,
-                        fill: '-2', // Fill to the dataset at index 0 (predictions)
-                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                        fill: false, // This dataset is just for the tooltip, so don't fill or show line
                         borderColor: 'transparent',
                         pointRadius: 0,
                     }]
@@ -960,8 +960,8 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        y: { beginAtZero: true, title: { display: true, text: 'Units Sold Per Day' } },
-                        x: { title: { display: true, text: 'Date' } }
+                        y: { beginAtZero: true, title: { display: true, text: 'Units Sold Per Week' } },
+                        x: { title: { display: true, text: 'Week Starting On' } }
                     },
                     plugins: {
                         legend: { display: false },
@@ -969,12 +969,12 @@
                             callbacks: {
                                 label: function(context) {
                                     if (context.datasetIndex === 0) {
-                                        const value = context.parsed.y;
-                                        const lower = lowerBounds[context.dataIndex];
-                                        const upper = upperBounds[context.dataIndex];
-                                        return `Predicted: ${value.toFixed(1)} (Range: ${lower.toFixed(1)} - ${upper.toFixed(1)})`;
+                                        const value = Math.round(context.parsed.y);
+                                        const lower = Math.round(lowerBounds[context.dataIndex]);
+                                        const upper = Math.round(upperBounds[context.dataIndex]);
+                                        return `Predicted: ${value} units (Range: ${lower} - ${upper})`;
                                     }
-                                    return null; // Hide tooltips for the fill datasets
+                                    return null; 
                                 }
                             }
                         }
@@ -1015,7 +1015,6 @@
             }
         });
 
-        // --- Recommendation Logic ---
         document.getElementById('recommendation-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const modelName = document.getElementById('recommendation-model').value;
@@ -1032,7 +1031,6 @@
             finally { hideLoader('recommendation-loader'); }
         });
 
-        // --- Discontinuation Logic ---
         async function loadDiscontinuationList() {
             const listContainer = document.getElementById('discontinuation-list');
             const loader = document.getElementById('discontinuation-loader');
@@ -1049,7 +1047,6 @@
             finally { hideLoader('discontinuation-loader'); }
         }
 
-        // --- Initial Load & Event Listeners ---
         document.addEventListener('DOMContentLoaded', () => {
             populatePhoneModels(); populateStores(); loadDiscontinuationList();
             updateClock(); setInterval(updateClock, 1000);

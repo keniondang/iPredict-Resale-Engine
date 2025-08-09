@@ -1,19 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
-Synthetic Data Generation for a Used iPhone Retail Business (v19 - Chronological Transactions)
-
-This script generates the final, high-fidelity dataset, incorporating all iterative refinements.
-
-VERSION 19 UPDATES:
-- Implemented chronological transaction IDs. Transactions are now sorted by date before
-  the final 'transaction_id' is assigned, ensuring that ID=1 is the earliest sale.
-- Implemented multi-item transactions (shopping baskets). A single transaction ID can now
-  contain a phone plus one or more compatible accessories.
-- Standardized accessory pricing to a fixed 20% margin over MSRP.
-- Ensured the 'storage_gb' column is blank (NaN) for all accessory products.
-- Final script generating a complete 6-table dataset with the most advanced logic.
-"""
-
 import pandas as pd
 import numpy as np
 from faker import Faker
@@ -21,20 +5,18 @@ import random
 from datetime import datetime, timedelta
 from typing import Tuple, Dict, List
 import os
+from sqlalchemy import create_engine
+import urllib
 
-# --- CONFIGURATION (User-Defined) ---
 START_DATE = datetime(2020, 8, 5)
 END_DATE = datetime.now()
 NUM_PHONE_UNITS = 10000
 NUM_ACCESSORY_SALES = 10000
-OUTPUT_DIRECTORY = "data"
 PHYSICAL_STORE_IDS = [1, 2, 3]
 ALL_STORE_IDS = [1, 2, 3, 4]
-
-# Initialize Faker for data generation
 fake = Faker()
-
-# --- HELPER FUNCTIONS ---
+DB_SERVER_NAME = "localhost\\SQLEXPRESS"
+DB_NAME = "UsedPhoneResale"
 
 def calculate_realistic_acquisition_price(
     product_details: pd.Series, acquisition_date: datetime.date, grade: str
@@ -87,9 +69,6 @@ def calculate_dynamic_days_on_market(
     final_high = high * sluggishness_multiplier
     return int(random.triangular(low=1, high=final_high, mode=final_mode))
 
-
-# --- DATA GENERATION FUNCTIONS ---
-
 def generate_stores() -> pd.DataFrame:
     """Generates the stores table."""
     print("Generating stores table...")
@@ -100,7 +79,7 @@ def generate_products() -> pd.DataFrame:
     """Generates the master product catalog with an expanded accessory list."""
     print("Generating products table with expanded accessories...")
     phone_data = [
-        # iPhone 11 series
+
         {'model_name': 'iPhone 11 64GB', 'model_tier': 11.0, 'storage_gb': 64, 'original_msrp': 699, 'release_date': '2019-09-20', 'successor_release_date': '2020-10-23', 'form_factor': '11', 'connector': 'lightning'},
         {'model_name': 'iPhone 11 128GB', 'model_tier': 11.0, 'storage_gb': 128, 'original_msrp': 749, 'release_date': '2019-09-20', 'successor_release_date': '2020-10-23', 'form_factor': '11', 'connector': 'lightning'},
         {'model_name': 'iPhone 11 256GB', 'model_tier': 11.0, 'storage_gb': 256, 'original_msrp': 849, 'release_date': '2019-09-20', 'successor_release_date': '2020-10-23', 'form_factor': '11', 'connector': 'lightning'},
@@ -110,7 +89,7 @@ def generate_products() -> pd.DataFrame:
         {'model_name': 'iPhone 11 Pro Max 64GB', 'model_tier': 11.7, 'storage_gb': 64, 'original_msrp': 1099, 'release_date': '2019-09-20', 'successor_release_date': '2020-10-23', 'form_factor': '11_pro_max', 'connector': 'lightning'},
         {'model_name': 'iPhone 11 Pro Max 256GB', 'model_tier': 11.7, 'storage_gb': 256, 'original_msrp': 1249, 'release_date': '2019-09-20', 'successor_release_date': '2020-10-23', 'form_factor': '11_pro_max', 'connector': 'lightning'},
         {'model_name': 'iPhone 11 Pro Max 512GB', 'model_tier': 11.7, 'storage_gb': 512, 'original_msrp': 1449, 'release_date': '2019-09-20', 'successor_release_date': '2020-10-23', 'form_factor': '11_pro_max', 'connector': 'lightning'},
-        # iPhone 12 series
+
         {'model_name': 'iPhone 12 Mini 64GB', 'model_tier': 12.2, 'storage_gb': 64, 'original_msrp': 599, 'release_date': '2020-11-13', 'successor_release_date': '2021-09-24', 'form_factor': '12_mini', 'connector': 'lightning'},
         {'model_name': 'iPhone 12 Mini 128GB', 'model_tier': 12.2, 'storage_gb': 128, 'original_msrp': 749, 'release_date': '2020-11-13', 'successor_release_date': '2021-09-24', 'form_factor': '12_mini', 'connector': 'lightning'},
         {'model_name': 'iPhone 12 Mini 256GB', 'model_tier': 12.2, 'storage_gb': 256, 'original_msrp': 849, 'release_date': '2020-11-13', 'successor_release_date': '2021-09-24', 'form_factor': '12_mini', 'connector': 'lightning'},
@@ -123,7 +102,7 @@ def generate_products() -> pd.DataFrame:
         {'model_name': 'iPhone 12 Pro Max 128GB', 'model_tier': 12.7, 'storage_gb': 128, 'original_msrp': 1099, 'release_date': '2020-11-13', 'successor_release_date': '2021-09-24', 'form_factor': '12_pro_max', 'connector': 'lightning'},
         {'model_name': 'iPhone 12 Pro Max 256GB', 'model_tier': 12.7, 'storage_gb': 256, 'original_msrp': 1199, 'release_date': '2020-11-13', 'successor_release_date': '2021-09-24', 'form_factor': '12_pro_max', 'connector': 'lightning'},
         {'model_name': 'iPhone 12 Pro Max 512GB', 'model_tier': 12.7, 'storage_gb': 512, 'original_msrp': 1399, 'release_date': '2020-11-13', 'successor_release_date': '2021-09-24', 'form_factor': '12_pro_max', 'connector': 'lightning'},
-        # iPhone 13 series
+
         {'model_name': 'iPhone 13 Mini 128GB', 'model_tier': 13.2, 'storage_gb': 128, 'original_msrp': 699, 'release_date': '2021-09-24', 'successor_release_date': '2022-09-16', 'form_factor': '13_mini', 'connector': 'lightning'},
         {'model_name': 'iPhone 13 Mini 256GB', 'model_tier': 13.2, 'storage_gb': 256, 'original_msrp': 799, 'release_date': '2021-09-24', 'successor_release_date': '2022-09-16', 'form_factor': '13_mini', 'connector': 'lightning'},
         {'model_name': 'iPhone 13 Mini 512GB', 'model_tier': 13.2, 'storage_gb': 512, 'original_msrp': 999, 'release_date': '2021-09-24', 'successor_release_date': '2022-09-16', 'form_factor': '13_mini', 'connector': 'lightning'},
@@ -138,7 +117,7 @@ def generate_products() -> pd.DataFrame:
         {'model_name': 'iPhone 13 Pro Max 256GB', 'model_tier': 13.7, 'storage_gb': 256, 'original_msrp': 1199, 'release_date': '2021-09-24', 'successor_release_date': '2022-09-16', 'form_factor': '13_pro_max', 'connector': 'lightning'},
         {'model_name': 'iPhone 13 Pro Max 512GB', 'model_tier': 13.7, 'storage_gb': 512, 'original_msrp': 1399, 'release_date': '2021-09-24', 'successor_release_date': '2022-09-16', 'form_factor': '13_pro_max', 'connector': 'lightning'},
         {'model_name': 'iPhone 13 Pro Max 1TB', 'model_tier': 13.7, 'storage_gb': 1024, 'original_msrp': 1499, 'release_date': '2021-09-24', 'successor_release_date': '2022-09-16', 'form_factor': '13_pro_max', 'connector': 'lightning'},
-        # iPhone 14 series
+
         {'model_name': 'iPhone 14 128GB', 'model_tier': 14.0, 'storage_gb': 128, 'original_msrp': 799, 'release_date': '2022-09-16', 'successor_release_date': '2023-09-22', 'form_factor': '14', 'connector': 'lightning'},
         {'model_name': 'iPhone 14 256GB', 'model_tier': 14.0, 'storage_gb': 256, 'original_msrp': 899, 'release_date': '2022-09-16', 'successor_release_date': '2023-09-22', 'form_factor': '14', 'connector': 'lightning'},
         {'model_name': 'iPhone 14 512GB', 'model_tier': 14.0, 'storage_gb': 512, 'original_msrp': 1099, 'release_date': '2022-09-16', 'successor_release_date': '2023-09-22', 'form_factor': '14', 'connector': 'lightning'},
@@ -153,7 +132,7 @@ def generate_products() -> pd.DataFrame:
         {'model_name': 'iPhone 14 Pro Max 256GB', 'model_tier': 14.7, 'storage_gb': 256, 'original_msrp': 1299, 'release_date': '2022-09-16', 'successor_release_date': '2023-09-22', 'form_factor': '14_pro_max', 'connector': 'lightning'},
         {'model_name': 'iPhone 14 Pro Max 512GB', 'model_tier': 14.7, 'storage_gb': 512, 'original_msrp': 1499, 'release_date': '2022-09-16', 'successor_release_date': '2023-09-22', 'form_factor': '14_pro_max', 'connector': 'lightning'},
         {'model_name': 'iPhone 14 Pro Max 1TB', 'model_tier': 14.7, 'storage_gb': 1024, 'original_msrp': 1699, 'release_date': '2022-09-16', 'successor_release_date': '2023-09-22', 'form_factor': '14_pro_max', 'connector': 'lightning'},
-        # iPhone 15 series
+
         {'model_name': 'iPhone 15 256GB', 'model_tier': 15.0, 'storage_gb': 256, 'original_msrp': 899, 'release_date': '2023-09-22', 'successor_release_date': '2024-09-20', 'form_factor': '15', 'connector': 'usb-c'},
         {'model_name': 'iPhone 15 512GB', 'model_tier': 15.0, 'storage_gb': 512, 'original_msrp': 1099, 'release_date': '2023-09-22', 'successor_release_date': '2024-09-20', 'form_factor': '15', 'connector': 'usb-c'},
         {'model_name': 'iPhone 15 Plus 256GB', 'model_tier': 15.2, 'storage_gb': 256, 'original_msrp': 999, 'release_date': '2023-09-22', 'successor_release_date': '2024-09-20', 'form_factor': '15_plus', 'connector': 'usb-c'},
@@ -163,7 +142,7 @@ def generate_products() -> pd.DataFrame:
         {'model_name': 'iPhone 15 Pro Max 256GB', 'model_tier': 15.7, 'storage_gb': 256, 'original_msrp': 1399, 'release_date': '2023-09-22', 'successor_release_date': '2024-09-20', 'form_factor': '15_pro_max', 'connector': 'usb-c'},
         {'model_name': 'iPhone 15 Pro Max 512GB', 'model_tier': 15.7, 'storage_gb': 512, 'original_msrp': 1599, 'release_date': '2023-09-22', 'successor_release_date': '2024-09-20', 'form_factor': '15_pro_max', 'connector': 'usb-c'},
         {'model_name': 'iPhone 15 Pro Max 1TB', 'model_tier': 15.7, 'storage_gb': 1024, 'original_msrp': 1799, 'release_date': '2023-09-22', 'successor_release_date': '2024-09-20', 'form_factor': '15_pro_max', 'connector': 'usb-c'},
-        # iPhone 16 series
+
         {'model_name': 'iPhone 16 128GB', 'model_tier': 16.0, 'storage_gb': 128, 'original_msrp': 829, 'release_date': '2024-09-20', 'successor_release_date': None, 'form_factor': '16', 'connector': 'usb-c'},
         {'model_name': 'iPhone 16 256GB', 'model_tier': 16.0, 'storage_gb': 256, 'original_msrp': 899, 'release_date': '2024-09-20', 'successor_release_date': None, 'form_factor': '16', 'connector': 'usb-c'},
         {'model_name': 'iPhone 16 512GB', 'model_tier': 16.0, 'storage_gb': 512, 'original_msrp': 999, 'release_date': '2024-09-20', 'successor_release_date': None, 'form_factor': '16', 'connector': 'usb-c'},
@@ -201,9 +180,9 @@ def generate_inventory_and_transactions(
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Generates inventory and transaction data.
-    MODIFIED: Transaction IDs are now assigned chronologically *after* all transactions are generated.
+    Transaction IDs are assigned chronologically *after* all transactions are generated.
     """
-    print("Starting integrated simulation...")
+    print("Starting integrated inventory and transaction simulation...")
     phone_products = products_df[products_df['product_type'] == 'Used Phone'].copy()
     min_tier = phone_products['model_tier'].min()
     max_tier = phone_products['model_tier'].max()
@@ -211,9 +190,6 @@ def generate_inventory_and_transactions(
     inventory_list, transactions_list = [], []
     total_days_in_history = (END_DATE - START_DATE).days
     acquisition_dates = [START_DATE + timedelta(days=random.randint(0, total_days_in_history)) for _ in range(NUM_PHONE_UNITS)]
-    
-    # This counter now represents a temporary 'basket_id' to group items in a single sale.
-    # It will be replaced by a final, chronological transaction_id later.
     basket_id_counter = 1
     
     generated_accessory_sales = 0
@@ -271,24 +247,13 @@ def generate_inventory_and_transactions(
         
     transactions_df = pd.DataFrame(transactions_list)
     transactions_df['transaction_date'] = pd.to_datetime(transactions_df['transaction_date'])
-    
-    # Sort all transactions by date, then by the original basket ID to keep items together
     transactions_df.sort_values(by=['transaction_date', 'transaction_id'], inplace=True)
-    
-    # Get the unique basket IDs in their new chronological order
     chronological_basket_ids = transactions_df['transaction_id'].unique()
-    
-    # Create a mapping from the original basket ID to the new chronological ID
     basket_to_new_id_map = {old_id: new_id for new_id, old_id in enumerate(chronological_basket_ids, 1)}
-    
-    # Map the new IDs and overwrite the 'transaction_id' column
     transactions_df['transaction_id'] = transactions_df['transaction_id'].map(basket_to_new_id_map)
-
-    # Convert date back to a date object
     transactions_df['transaction_date'] = transactions_df['transaction_date'].dt.date
 
     return pd.DataFrame(inventory_list), transactions_df
-
 
 def generate_accessory_data(
     products_df: pd.DataFrame, stores_df: pd.DataFrame
@@ -320,33 +285,66 @@ def generate_accessory_data(
                 phone_to_acc_map[phone_id].append(acc_id)
     return pd.DataFrame(accessory_inventory_list), pd.DataFrame(compatibility_list), phone_to_acc_map
 
-# --- MAIN ORCHESTRATION FUNCTION ---
+def load_dataframes_to_db(dataframe_dict: Dict[str, pd.DataFrame]):
+    """
+    Loads a dictionary of pandas DataFrames into a new SQL Server database.
+    Each DataFrame will become a table in the database.
+    """
+    try:
+
+        params = urllib.parse.quote_plus(
+            f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+            f"SERVER={DB_SERVER_NAME};"
+            f"DATABASE={DB_NAME};"
+            f"Trusted_Connection=yes;"
+        )
+        connection_string = f"mssql+pyodbc:///?odbc_connect={params}"
+        engine = create_engine(connection_string)
+
+        with engine.connect() as connection:
+            print(f"\nSuccessfully connected to SQL Server: {DB_SERVER_NAME}, Database: {DB_NAME}")
+            print(f"Found {len(dataframe_dict)} dataframes to load:")
+            
+            for table_name, df in dataframe_dict.items():
+                print(f"  - Loading DataFrame into table '{table_name}'...")
+                df.to_sql(table_name, engine, if_exists='replace', index=False)
+                print(f"    ...Done. Table '{table_name}' created with {len(df)} rows.")
+
+            print("\nDatabase creation and data loading complete.")
+            print("You can now verify the tables in SQL Server Management Studio (SSMS).")
+
+    except Exception as e:
+        print(f"\nAn error occurred: {e}")
+        print("\nPlease check the following:")
+        print("1. Is the SQL Server instance running?")
+        print(f"2. Is the SERVER_NAME ('{DB_SERVER_NAME}') and DATABASE_NAME ('{DB_NAME}') in the script correct?")
+        print("3. Have you installed the required libraries (`pip install sqlalchemy pyodbc pandas numpy faker`)?")
+        print("4. Is the 'ODBC Driver 17 for SQL Server' installed?")
+
 def main():
-    """Main function to orchestrate the generation of the full 6-table dataset."""
-    print("--- Starting Synthetic Data Generation (v19 - Chronological Transactions) ---")
-    if not os.path.exists(OUTPUT_DIRECTORY):
-        os.makedirs(OUTPUT_DIRECTORY)
-        print(f"Created output directory: {OUTPUT_DIRECTORY}/")
-    
+    """Main function to generate data and load it directly into SQL Server."""
+    print("--- Starting Synthetic Data Generation and Database Loading ---")
+
+    print("\n--- Step 1: Generating Data ---")
     stores_df = generate_stores()
     products_df = generate_products()
     accessory_inventory_df, accessory_compatibility_df, phone_to_acc_map = generate_accessory_data(products_df, stores_df)
     inventory_units_df, transactions_df = generate_inventory_and_transactions(products_df, phone_to_acc_map)
-    
-    print(f"\nSaving dataframes to '{OUTPUT_DIRECTORY}/' directory...")
-    file_paths = {
-        "stores.csv": stores_df, "products.csv": products_df,
-        "inventory_units.csv": inventory_units_df, "transactions.csv": transactions_df,
-        "accessory_inventory.csv": accessory_inventory_df, "accessory_compatibility.csv": accessory_compatibility_df
+    print("--- Data Generation Complete ---")
+
+    dataframe_dict = {
+        "stores": stores_df,
+        "products": products_df,
+        "inventory_units": inventory_units_df,
+        "transactions": transactions_df,
+        "accessory_inventory": accessory_inventory_df,
+        "accessory_compatibility": accessory_compatibility_df
     }
-    for filename, df in file_paths.items():
-        try:
-            full_path = os.path.join(OUTPUT_DIRECTORY, filename)
-            df.to_csv(full_path, index=False)
-            print(f"- Successfully saved {full_path}")
-        except Exception as e:
-            print(f"An error occurred while saving {filename}: {e}")
-    print("\n--- Data Generation Complete ---")
+    
+    print("\n--- Step 2: Loading Data into SQL Server ---")
+    load_dataframes_to_db(dataframe_dict)
+    
+    print("\n--- Full Process Complete ---")
 
 if __name__ == "__main__":
     main()
