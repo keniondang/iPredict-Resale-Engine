@@ -27,7 +27,7 @@ def train_price_model(inventory: pd.DataFrame, products: pd.DataFrame, models_di
     data = pd.merge(inventory, products, on='product_id')
     
     categorical_features = ['base_model', 'grade', 'model_tier', 'month_of_year', 'is_holiday_season']
-    numerical_features = ['storage_gb', 'original_msrp', 'days_since_model_release', 'days_since_successor_release']
+    numerical_features = ['storage_gb', 'original_msrp', 'days_since_model_release', 'days_since_successor_release', 'has_successor']
     
     y = data['acquisition_price'].dropna()
     X = data.loc[y.index]
@@ -60,22 +60,14 @@ def train_price_model(inventory: pd.DataFrame, products: pd.DataFrame, models_di
     joblib.dump({'models': models}, os.path.join(models_dir, 'price_model_pipeline.joblib'))
     print(f"Price prediction pipeline saved successfully.")
 
-def train_velocity_model(inventory: pd.DataFrame, products: pd.DataFrame, transactions: pd.DataFrame, models_dir: str):
-    print("\n--- [Task] Training ADVANCED Sales Velocity Prediction Model ---")
+def train_velocity_model(train_data: pd.DataFrame, grade_history_calculator: GradeHistoryCalculator, models_dir: str):
 
-    sold_units = pd.merge(inventory[inventory['status'] == 'Sold'], transactions[['unit_id', 'transaction_date']], on='unit_id')
-    data = pd.merge(sold_units, products, on='product_id')
-    
-    target_definer = TargetDefiner().fit(data)
-    labeled_data = target_definer.transform(data)
-    
-    grade_history_calc = GradeHistoryCalculator().fit(labeled_data)
+    print("\n--- [Task] Training Sales Velocity Prediction Model ---")
 
-    y = labeled_data['mover_category']
-    X = labeled_data
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-    
+    y_train = train_data['mover_category']
+    X_train = train_data
+    print("\nModel Performance on Test Set:") 
+
     final_model_features = [
         'model_tier', 'storage_gb', 'original_msrp',
         'grade_specific_sales_last_120d',
@@ -90,36 +82,28 @@ def train_velocity_model(inventory: pd.DataFrame, products: pd.DataFrame, transa
     )
 
     pipeline = Pipeline(steps=[
-        ('history_features', grade_history_calc),
+        ('history_features', grade_history_calculator),
         ('preprocessor', preprocessor),
         ('classifier', GradientBoostingClassifier(n_estimators=100, random_state=42))
     ])
-    
+        
     pipeline.fit(X_train, y_train)
 
-    print("\nModel Performance on Test Set:")
-    print(classification_report(y_test, pipeline.predict(X_test), zero_division=0))
-
-    final_artifact = {'pipeline': pipeline, 'target_definer': target_definer}
+    final_artifact = {'pipeline': pipeline}
     joblib.dump(final_artifact, os.path.join(models_dir, 'velocity_model_pipeline.joblib'))
-    print(f"Advanced sales velocity pipeline saved successfully.")
+    print(f"Sales velocity pipeline saved successfully.")
 
-def train_dynamic_selling_price_model(inventory: pd.DataFrame, products: pd.DataFrame, transactions: pd.DataFrame, models_dir: str):
+def train_dynamic_selling_price_model(train_data: pd.DataFrame, all_transactions: pd.DataFrame, all_products: pd.DataFrame, db_engine, models_dir: str):
     print("\n--- [Task] Training Dynamic Selling Price Prediction Model ---")
     
-    sold_units = pd.merge(inventory[inventory['status'] == 'Sold'], transactions[['unit_id', 'transaction_date', 'final_sale_price']], on='unit_id')
-    data = pd.merge(sold_units, products, on='product_id').dropna(subset=['final_sale_price'])
-    
-    sales_history = pd.merge(transactions, products, on='product_id')
-    market_demand_calc = MarketDemandCalculator(lookback_days=7).fit(sales_history)
-    
-    y = data['final_sale_price']
-    X = data
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    sales_history = pd.merge(all_transactions, all_products, on='product_id')
+    market_demand_calc = MarketDemandCalculator(db_engine=db_engine, lookback_days=7).fit(sales_history)
+
+    y_train = train_data['final_sale_price']
+    X_train = train_data
 
     categorical_features = ['grade', 'model_tier', 'base_model', 'month_of_year', 'is_holiday_season']
-    numerical_features = ['storage_gb', 'original_msrp', 'days_since_model_release', 'days_since_successor_release', 'market_demand']
+    numerical_features = ['storage_gb', 'original_msrp', 'days_since_model_release', 'days_since_successor_release', 'market_demand', 'has_successor']
     
     preprocessor = ColumnTransformer(
         transformers=[
@@ -240,12 +224,48 @@ def main():
     
     phones_only_df = products_df[products_df['product_type'] == 'Used Phone']
 
+    print("\n--- Preparing Master Dataset and Performing Time-Based Split ---")
+
+    # 1. Create the base dataset of all sold units with their features
+    # This combines logic that was previously inside your training functions.
+    sold_units = pd.merge(inventory_df[inventory_df['status'] == 'Sold'], transactions_df[['unit_id', 'transaction_date', 'final_sale_price']], on='unit_id')
+    master_df = pd.merge(sold_units, phones_only_df, on='product_id').dropna(subset=['final_sale_price', 'transaction_date'])
+    master_df = master_df.sort_values('transaction_date').reset_index(drop=True)
+
+    # 2. Define the target variable for the velocity model before splitting
+    # This ensures the split is stratified correctly if needed, and the target is ready.
+    print("  - Defining target variable ('mover_category')...")
+    target_definer = TargetDefiner().fit(master_df)
+    labeled_master_df = target_definer.transform(master_df)
+
+    print("  - Fitting GradeHistoryCalculator on the full labeled dataset...")
+    grade_history_calc = GradeHistoryCalculator().fit(labeled_master_df)
+
+    # 3. Perform the time-based split
+    # We'll use the first 80% of transactions for training and the last 20% for testing.
+    split_index = int(len(labeled_master_df) * 0.8)
+    train_df = labeled_master_df.iloc[:split_index]
+    test_df = labeled_master_df.iloc[split_index:]
+
+    print(f"  - Data split into training and test sets.")
+    print(f"  - Training set: {len(train_df)} records, from {train_df['transaction_date'].min().date()} to {train_df['transaction_date'].max().date()}")
+    print(f"  - Test set:     {len(test_df)} records, from {test_df['transaction_date'].min().date()} to {test_df['transaction_date'].max().date()}")
+
+    # 4. Save the test set and the fitted target_definer to disk
+    # This is crucial for the evaluation script.
+    print("  - Saving test set and target definer for evaluation...")
+    joblib.dump({
+        'test_df': test_df,
+        'target_definer': target_definer # We save this to use in evaluation
+    }, os.path.join(MODELS_DIR, 'holdout_test_set.joblib'))
+    print("--- Data Splitting Complete ---")
+
     if run_all or args.price:
         train_price_model(inventory_df, phones_only_df, MODELS_DIR)
     if run_all or args.velocity:
-        train_velocity_model(inventory_df, phones_only_df, transactions_df, MODELS_DIR)
+        train_velocity_model(train_df, grade_history_calc, MODELS_DIR)
     if run_all or args.dynamic_price:
-        train_dynamic_selling_price_model(inventory_df, phones_only_df, transactions_df, MODELS_DIR)
+        train_dynamic_selling_price_model(train_df, transactions_df, phones_only_df, db_engine, MODELS_DIR)
     if run_all or args.forecast:
         for name in phones_only_df['model_name'].dropna().unique():
             train_forecast_model(name, phones_only_df, transactions_df, MODELS_DIR)

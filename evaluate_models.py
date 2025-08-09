@@ -33,25 +33,22 @@ def evaluate_price_model(products_df, inventory_df):
     print(f"  - Result: ${mae:.2f}\n")
 
 
-def evaluate_velocity_model(products_df, inventory_df, transactions_df):
+def evaluate_velocity_model(test_data, target_definer, db_engine):
     """Loads the sales velocity pipeline and prints its classification report on the test set."""
     print("--- 2. Evaluating Sales Velocity Pipeline ---")
     try:
+        # Load the artifact, which now correctly contains only the pipeline
         artifact = joblib.load('models/velocity_model_pipeline.joblib')
         pipeline = artifact['pipeline']
-        target_definer = artifact['target_definer']
+        pipeline.named_steps['history_features'].db_engine = db_engine
     except FileNotFoundError:
         print("ERROR: `velocity_model_pipeline.joblib` not found. Please run the trainer first.")
         return
 
-    sold_units = pd.merge(inventory_df[inventory_df['status'] == 'Sold'], transactions_df[['unit_id', 'transaction_date']], on='unit_id')
-    data = pd.merge(sold_units, products_df, on='product_id')
-
-    labeled_data = target_definer.transform(data)
-    y = labeled_data['mover_category']
-    X = labeled_data
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    # The function now uses the test_data and target_definer that were passed into it.
+    # We no longer need to load data or perform splits here.
+    y_test = test_data['mover_category']
+    X_test = test_data
 
     y_pred = pipeline.predict(X_test)
     report = classification_report(y_test, y_pred, zero_division=0)
@@ -64,24 +61,21 @@ def evaluate_velocity_model(products_df, inventory_df, transactions_df):
     print("")
 
 
-def evaluate_dynamic_selling_price_model(products_df, inventory_df, transactions_df):
+def evaluate_dynamic_selling_price_model(test_data, db_engine):
     """Loads the dynamic selling price pipeline and evaluates its MAE on the test set."""
     print("--- 3. Evaluating Dynamic Selling Price Pipeline ---")
     try:
         artifact = joblib.load('models/dynamic_selling_price_pipeline.joblib')
+        for model_name, pipeline in artifact['models'].items():
+            if 'demand_calculator' in pipeline.named_steps:
+                pipeline.named_steps['demand_calculator'].db_engine = db_engine
         median_pipeline = artifact['models']['median_fair_market_price']
     except FileNotFoundError:
         print("ERROR: `dynamic_selling_price_pipeline.joblib` not found. Please run the trainer first.")
         return
 
-    sold_units = pd.merge(inventory_df[inventory_df['status'] == 'Sold'], transactions_df[['unit_id', 'transaction_date', 'final_sale_price']], on='unit_id')
-    data = pd.merge(sold_units, products_df, on='product_id').dropna(subset=['final_sale_price'])
-    
-    y = data['final_sale_price']
-    X = data
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
+    y_test = test_data['final_sale_price']
+    X_test = test_data
     y_pred = median_pipeline.predict(X_test)
     mae = mean_absolute_error(y_test, y_pred)
 
@@ -148,28 +142,52 @@ def main():
     db_engine = get_db_engine()
     if db_engine is None: return
 
-    print("--- Loading Data from Database... ---")
+    # --- Step 1: Load all data sources ---
+
+    # Load the verified, unseen holdout test data from the file
+    print("--- Loading Holdout Test Set from File... ---")
+    holdout_artifact = joblib.load('models/holdout_test_set.joblib')
+    test_df = holdout_artifact['test_df']
+    target_definer_from_holdout = holdout_artifact['target_definer']
+    print("--- Holdout Test Set Loaded ---\n")
+
+    # Load original tables from DB for functions that still need them (Recommender, Price Model)
+    print("--- Loading Full Data Tables from Database... ---")
     inventory_df = pd.read_sql("SELECT * FROM inventory_units", db_engine)
     products_df = pd.read_sql("SELECT * FROM products", db_engine)
     transactions_df = pd.read_sql("SELECT * FROM transactions", db_engine)
     compat_df = pd.read_sql("SELECT * FROM accessory_compatibility", db_engine)
-    
+    print("--- Database Tables Loaded ---\n")
+
+    # --- Step 2: Prepare and process dataframes ---
+
+    # Process products_df to create features used by various models
     products_df['base_model'] = products_df['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
-    
-    for df in [inventory_df, transactions_df]:
+
+    # Process date columns for all relevant dataframes
+    for df in [inventory_df, transactions_df, test_df]: # Added test_df here for safety
         for col in ['acquisition_date', 'transaction_date']:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce')
 
-    print("--- Data Loading Complete. Starting Evaluations... ---\n")
-
+    # Create a dataframe of only phone products for specific model evaluations
     phones_only_df = products_df[products_df['product_type'] == 'Used Phone']
 
+    print("--- Data Loading and Preparation Complete. Starting Evaluations... ---\n")
+
+    # --- Step 3: Call evaluation functions with the correct data ---
+
+    # This model is evaluated on its own data split for now
     evaluate_price_model(phones_only_df, inventory_df)
-    evaluate_velocity_model(phones_only_df, inventory_df, transactions_df)
-    evaluate_dynamic_selling_price_model(phones_only_df, inventory_df, transactions_df)
+
+    # These models use the verified holdout test set
+    evaluate_velocity_model(test_df, target_definer_from_holdout, db_engine)
+    evaluate_dynamic_selling_price_model(test_df, db_engine)
+
+    # The recommender evaluation uses the full historical transaction data
     evaluate_recommender_effectiveness(products_df, transactions_df, compat_df)
 
+    # --- Step 4: Finalize ---
     print("=========================================")
     print("=          AUDIT COMPLETE               =")
     print("=========================================")

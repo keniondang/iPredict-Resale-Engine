@@ -7,63 +7,76 @@ from typing import Tuple, Dict, List
 import os
 from sqlalchemy import create_engine
 import urllib
+import yaml
+import json
 from database_utils import SERVER_NAME as DB_SERVER_NAME, DATABASE_NAME as DB_NAME
 
+# Global constants are now sourced from the config file within the main() function.
 START_DATE = datetime(2020, 8, 5)
 END_DATE = datetime.now()
-NUM_PHONE_UNITS = 10000
-NUM_ACCESSORY_SALES = 10000
 PHYSICAL_STORE_IDS = [1, 2, 3]
 ALL_STORE_IDS = [1, 2, 3, 4]
 fake = Faker()
 
 def calculate_realistic_acquisition_price(
-    product_details: pd.Series, acquisition_date: datetime.date, grade: str
+    product_details: pd.Series, acquisition_date: datetime.date, grade: str, config: dict
 ) -> float:
     """Calculates a realistic acquisition price using user-defined calibrated depreciation."""
+    cfg = config['acquisition_price_logic']
+
     base_price = product_details['original_msrp']
-    used_market_value = base_price * 0.90
+    used_market_value = base_price * cfg['initial_market_drop']
     days_old = max(0, (acquisition_date - product_details['release_date'].date()).days)
-    daily_decay_rate = 0.0002
-    used_market_value *= ((1 - daily_decay_rate) ** days_old)
+
+    used_market_value *= ((1 - cfg['daily_decay_rate']) ** days_old)
+
     successor_release_date = product_details['successor_release_date']
     if pd.notna(successor_release_date) and acquisition_date > successor_release_date.date():
-        used_market_value *= 0.80
-    grade_acquisition_multipliers = {'A': 0.94, 'B': 0.78, 'C': 0.65, 'D': 0.40}
-    acquisition_price_base = used_market_value * grade_acquisition_multipliers.get(grade, 0.5)
-    final_price = acquisition_price_base * (1 + random.uniform(-0.03, 0.03))
+        used_market_value *= cfg['successor_release_drop']
+
+    acquisition_price_base = used_market_value * cfg['grade_multipliers'].get(grade, 0.5)
+
+    noise = cfg['price_noise_factor']
+    final_price = acquisition_price_base * (1 + random.uniform(-noise, noise))
+
     return round(max(0, final_price), 2)
 
 def calculate_dynamic_max_margin(
-    tier: float, grade: str, min_tier: float, max_tier: float
+    tier: float, grade: str, min_tier: float, max_tier: float, config: dict
 ) -> float:
     """Calculates the maximum potential profit margin using a stable, subtractive penalty system."""
-    newest_tier_margin = 1.12
-    oldest_tier_margin = 1.05
+    cfg = config['selling_logic']
+    margin_cfg = cfg['margin']
+
+    newest_tier_margin = margin_cfg['newest_model_tier']
+    oldest_tier_margin = margin_cfg['oldest_model_tier']
     if max_tier == min_tier:
         normalized_tier = 1.0
     else:
         normalized_tier = (tier - min_tier) / (max_tier - min_tier)
     tier_based_margin = oldest_tier_margin + normalized_tier * (newest_tier_margin - oldest_tier_margin)
-    grade_margin_penalties = {'A': 0.00, 'B': 0.012, 'C': 0.03, 'D': 0.5}
-    penalty = grade_margin_penalties.get(grade, 0.07)
+
+    penalty = cfg['grade_margin_penalties'].get(grade, 0.07)
     final_base_margin = tier_based_margin - penalty
     return final_base_margin
 
 def calculate_dynamic_days_on_market(
-    tier: float, grade: str, min_tier: float, max_tier: float
+    tier: float, grade: str, min_tier: float, max_tier: float, config: dict
 ) -> int:
     """Calculates a realistic selling time based on the phone's age and condition."""
-    newest_model_params = {'mode': 15, 'high': 90}
-    oldest_model_params = {'mode': 120, 'high': 365}
+    cfg = config['days_on_market_logic']
+
+    newest_model_params = cfg['newest_model']
+    oldest_model_params = cfg['oldest_model']
     if max_tier == min_tier:
         normalized_tier = 1.0
     else:
         normalized_tier = (tier - min_tier) / (max_tier - min_tier)
-    mode = oldest_model_params['mode'] - normalized_tier * (oldest_model_params['mode'] - newest_model_params['mode'])
-    high = oldest_model_params['high'] - normalized_tier * (oldest_model_params['high'] - newest_model_params['high'])
-    grade_sluggishness = {'A': 1.0, 'B': 1.5, 'C': 2.0, 'D': 2.5}
-    sluggishness_multiplier = grade_sluggishness.get(grade, 2.0)
+
+    mode = oldest_model_params['mode_days'] - normalized_tier * (oldest_model_params['mode_days'] - newest_model_params['mode_days'])
+    high = oldest_model_params['high_days'] - normalized_tier * (oldest_model_params['high_days'] - newest_model_params['high_days'])
+
+    sluggishness_multiplier = cfg['grade_sluggishness'].get(grade, 2.0)
     final_mode = min(mode * sluggishness_multiplier, high * sluggishness_multiplier)
     final_high = high * sluggishness_multiplier
     return int(random.triangular(low=1, high=final_high, mode=final_mode))
@@ -170,30 +183,47 @@ def generate_products() -> pd.DataFrame:
     df = pd.DataFrame(products_list)
     df.loc[df['product_type'] == 'Accessory', 'storage_gb'] = np.nan
     df['product_id'] = range(1, len(df) + 1)
+    
+    # Create the base_model column before the dataframe is loaded into the DB
+    df['base_model'] = df['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
+
     df['release_date'] = pd.to_datetime(df['release_date'])
     df['successor_release_date'] = pd.to_datetime(df['successor_release_date'])
+    
+    # Convert the 'compatibility' column from a dictionary object to a JSON string
+    # The database can store a string, but not a Python dictionary object.
+    df['compatibility'] = df['compatibility'].apply(
+        lambda x: json.dumps(x) if isinstance(x, dict) else None
+    )
+
     return df
 
 def generate_inventory_and_transactions(
-    products_df: pd.DataFrame, accessory_compatibility: Dict[int, List[int]]
+    products_df: pd.DataFrame, accessory_compatibility: Dict[int, List[int]], config: dict
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Generates inventory and transaction data.
     Transaction IDs are assigned chronologically *after* all transactions are generated.
     """
     print("Starting integrated inventory and transaction simulation...")
+    
+    # Get simulation parameters from config
+    sim_cfg = config['simulation_parameters']
+    num_phone_units = sim_cfg['num_phone_units']
+    num_accessory_sales = sim_cfg['num_accessory_sales']
+    
     phone_products = products_df[products_df['product_type'] == 'Used Phone'].copy()
     min_tier = phone_products['model_tier'].min()
     max_tier = phone_products['model_tier'].max()
     phone_products.set_index('product_id', inplace=True)
     inventory_list, transactions_list = [], []
     total_days_in_history = (END_DATE - START_DATE).days
-    acquisition_dates = [START_DATE + timedelta(days=random.randint(0, total_days_in_history)) for _ in range(NUM_PHONE_UNITS)]
+    acquisition_dates = [START_DATE + timedelta(days=random.randint(0, total_days_in_history)) for _ in range(num_phone_units)]
     basket_id_counter = 1
     
     generated_accessory_sales = 0
     
-    for i in range(NUM_PHONE_UNITS):
+    for i in range(num_phone_units):
         unit_id = i + 1
         product_id = random.choice(phone_products.index)
         product_details = phone_products.loc[product_id]
@@ -202,15 +232,20 @@ def generate_inventory_and_transactions(
             acquisition_date = START_DATE + timedelta(days=random.randint(0, total_days_in_history))
         grade = random.choices(['A', 'B', 'C', 'D'], weights=[0.4, 0.35, 0.2, 0.05], k=1)[0]
         age_at_acquisition_days = (acquisition_date.date() - product_details['release_date'].date()).days
-        acquisition_price = calculate_realistic_acquisition_price(product_details, acquisition_date.date(), grade)
-        days_on_market = calculate_dynamic_days_on_market(tier=product_details['model_tier'], grade=grade, min_tier=min_tier, max_tier=max_tier)
+        
+        acquisition_price = calculate_realistic_acquisition_price(product_details, acquisition_date.date(), grade, config)
+        days_on_market = calculate_dynamic_days_on_market(tier=product_details['model_tier'], grade=grade, min_tier=min_tier, max_tier=max_tier, config=config)
+        
         potential_sale_date = acquisition_date + timedelta(days=days_on_market)
         unit_record = {'unit_id': unit_id, 'product_id': product_id, 'store_id': random.choice(PHYSICAL_STORE_IDS), 'acquisition_date': acquisition_date.date(), 'grade': grade, 'age_at_acquisition_days': age_at_acquisition_days, 'acquisition_price': acquisition_price}
+        
         if potential_sale_date <= END_DATE:
             unit_record['status'] = 'Sold'
-            max_profit_margin = calculate_dynamic_max_margin(tier=product_details['model_tier'], grade=grade, min_tier=min_tier, max_tier=max_tier)
-            margin_decay_per_day = 0.0005
-            floor_margin = 0.90
+            
+            max_profit_margin = calculate_dynamic_max_margin(tier=product_details['model_tier'], grade=grade, min_tier=min_tier, max_tier=max_tier, config=config)
+            margin_decay_per_day = config['selling_logic']['margin_decay_per_day']
+            floor_margin = config['selling_logic']['margin']['floor']
+            
             dynamic_profit_margin = max_profit_margin - (days_on_market * margin_decay_per_day)
             final_profit_margin = max(floor_margin, dynamic_profit_margin)
             calculated_sale_price = acquisition_price * final_profit_margin
@@ -233,7 +268,7 @@ def generate_inventory_and_transactions(
             unit_record['status'] = 'In Stock'
         inventory_list.append(unit_record)
 
-    num_standalone_accessories = NUM_ACCESSORY_SALES - generated_accessory_sales
+    num_standalone_accessories = num_accessory_sales - generated_accessory_sales
     print(f"Generating {num_standalone_accessories} standalone accessory sales...")
     accessory_products = products_df[products_df['product_type'] == 'Accessory']
     for _ in range(num_standalone_accessories):
@@ -267,14 +302,27 @@ def generate_accessory_data(
     for _, store in physical_stores.iterrows():
         for _, acc in accessories.iterrows():
             accessory_inventory_list.append({'store_id': store['store_id'], 'product_id': acc['product_id'], 'quantity': random.randint(10, 100)})
+
     for _, acc in accessories.iterrows():
         rules = acc['compatibility']
+
+        # If 'rules' is a valid JSON string, parse it back into a dictionary.
+        if isinstance(rules, str):
+            try:
+                rules = json.loads(rules)
+            except json.JSONDecodeError:
+                rules = None # Handle cases of malformed JSON, if any.
+        
+        # If rules is None or not a dictionary after loading, skip it.
+        if not isinstance(rules, dict):
+            continue
+
         for _, phone in phones.iterrows():
             is_compatible = False
             if rules.get('type') == 'universal': is_compatible = True
-            elif 'form_factor' in rules and rules['form_factor'] == phone['form_factor']: is_compatible = True
-            elif 'connector' in rules and rules['connector'] == phone['connector']: is_compatible = True
-            elif 'min_tier' in rules and phone['model_tier'] >= rules['min_tier']: is_compatible = True
+            elif 'form_factor' in rules and rules.get('form_factor') == phone['form_factor']: is_compatible = True
+            elif 'connector' in rules and rules.get('connector') == phone['connector']: is_compatible = True
+            elif 'min_tier' in rules and phone['model_tier'] >= rules.get('min_tier', 999): is_compatible = True
             if is_compatible:
                 phone_id = phone['product_id']
                 acc_id = acc['product_id']
@@ -282,6 +330,7 @@ def generate_accessory_data(
                 if phone_id not in phone_to_acc_map:
                     phone_to_acc_map[phone_id] = []
                 phone_to_acc_map[phone_id].append(acc_id)
+                
     return pd.DataFrame(accessory_inventory_list), pd.DataFrame(compatibility_list), phone_to_acc_map
 
 def load_dataframes_to_db(dataframe_dict: Dict[str, pd.DataFrame]):
@@ -290,7 +339,6 @@ def load_dataframes_to_db(dataframe_dict: Dict[str, pd.DataFrame]):
     Each DataFrame will become a table in the database.
     """
     try:
-
         params = urllib.parse.quote_plus(
             f"DRIVER={{ODBC Driver 17 for SQL Server}};"
             f"SERVER={DB_SERVER_NAME};"
@@ -317,18 +365,24 @@ def load_dataframes_to_db(dataframe_dict: Dict[str, pd.DataFrame]):
         print("\nPlease check the following:")
         print("1. Is the SQL Server instance running?")
         print(f"2. Is the SERVER_NAME ('{DB_SERVER_NAME}') and DATABASE_NAME ('{DB_NAME}') in the script correct?")
-        print("3. Have you installed the required libraries (`pip install sqlalchemy pyodbc pandas numpy faker`)?")
+        print("3. Have you installed the required libraries (`pip install sqlalchemy pyodbc pandas numpy faker PyYAML`)?")
         print("4. Is the 'ODBC Driver 17 for SQL Server' installed?")
 
 def main():
     """Main function to generate data and load it directly into SQL Server."""
     print("--- Starting Synthetic Data Generation and Database Loading ---")
 
+    # Load configuration from YAML file
+    print("\n--- Loading Configuration ---")
+    with open('config.yaml', 'r') as f:
+        config = yaml.safe_load(f)
+    print("--- Configuration Loaded ---")
+
     print("\n--- Step 1: Generating Data ---")
     stores_df = generate_stores()
     products_df = generate_products()
     accessory_inventory_df, accessory_compatibility_df, phone_to_acc_map = generate_accessory_data(products_df, stores_df)
-    inventory_units_df, transactions_df = generate_inventory_and_transactions(products_df, phone_to_acc_map)
+    inventory_units_df, transactions_df = generate_inventory_and_transactions(products_df, phone_to_acc_map, config)
     print("--- Data Generation Complete ---")
 
     dataframe_dict = {

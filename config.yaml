@@ -1,0 +1,51 @@
+# Configuration for Synthetic Data Generation
+
+simulation_parameters:
+  num_phone_units: 10000
+  num_accessory_sales: 10000
+
+acquisition_price_logic:
+  # Initial value drop from MSRP for a new-in-box phone entering the used market
+  initial_market_drop: 0.90
+  # Daily price decay rate before a successor is released
+  daily_decay_rate: 0.0002
+  # Additional sharp price drop after a successor model is released
+  successor_release_drop: 0.80
+  # Price multipliers based on the physical grade of the phone
+  grade_multipliers:
+    'A': 0.94
+    'B': 0.78
+    'C': 0.65
+    'D': 0.40
+  # Random noise factor to make prices less uniform (+/-)
+  price_noise_factor: 0.03
+
+selling_logic:
+  # Defines the maximum potential profit margin range
+  margin:
+    newest_model_tier: 1.12
+    oldest_model_tier: 1.05
+    floor: 0.90 # The absolute lowest margin (e.g., selling at a 10% loss)
+  # Penalty subtracted from the margin based on grade
+  grade_margin_penalties:
+    'A': 0.00
+    'B': 0.012
+    'C': 0.03
+    'D': 0.50
+  # How much the margin decays for each day the item is on the market
+  margin_decay_per_day: 0.0005
+
+days_on_market_logic:
+  # Defines how long a phone is expected to sit in inventory
+  newest_model:
+    mode_days: 15
+    high_days: 90
+  oldest_model:
+    mode_days: 120
+    high_days: 365
+  # Multiplier that increases time on market based on poorer grade
+  grade_sluggishness:
+    'A': 1.0
+    'B': 1.5
+    'C': 2.0
+    'D': 2.5

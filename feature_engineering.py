@@ -3,6 +3,7 @@ import re
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from datetime import timedelta
+from sqlalchemy import text
 
 class DateFeatureCalculator(BaseEstimator, TransformerMixin):
     """
@@ -17,7 +18,7 @@ class DateFeatureCalculator(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        
+
         X_transformed = X.copy()
         X_transformed[self.reference_date_col] = pd.to_datetime(X_transformed[self.reference_date_col])
         X_transformed['release_date'] = pd.to_datetime(X_transformed['release_date'])
@@ -25,7 +26,8 @@ class DateFeatureCalculator(BaseEstimator, TransformerMixin):
 
         X_transformed['days_since_model_release'] = (X_transformed[self.reference_date_col] - X_transformed['release_date']).dt.days
         X_transformed['days_since_successor_release'] = (X_transformed[self.reference_date_col] - X_transformed['successor_release_date']).dt.days
-        X_transformed['days_since_successor_release'] = X_transformed['days_since_successor_release'].fillna(-999)
+        X_transformed['has_successor'] = X_transformed['days_since_successor_release'].notna().astype(int)
+        X_transformed['days_since_successor_release'] = X_transformed['days_since_successor_release'].fillna(0)
 
         X_transformed['month_of_year'] = X_transformed[self.reference_date_col].dt.month
         X_transformed['is_holiday_season'] = X_transformed['month_of_year'].isin([11, 12]).astype(int)
@@ -37,15 +39,14 @@ class MarketDemandCalculator(BaseEstimator, TransformerMixin):
     Calculates market demand. This transformer must be fitted on the entire
     sales history to create an internal lookup mechanism.
     """
-    def __init__(self, lookback_days=7):
+    def __init__(self, db_engine, lookback_days=7):
+        self.db_engine = db_engine
         self.lookback_days = lookback_days
 
     def fit(self, X, y=None):
-
-        self.sales_history_ = X.copy()
-        self.sales_history_['transaction_date'] = pd.to_datetime(self.sales_history_['transaction_date'])
-        self.unique_base_models_ = set(self.sales_history_['base_model'].unique())
-
+        with self.db_engine.connect() as connection:
+            result = connection.execute(text("SELECT DISTINCT base_model FROM products WHERE base_model IS NOT NULL"))
+            self.unique_base_models_ = {row[0] for row in result}
         return self
 
     def transform(self, X):
@@ -66,29 +67,56 @@ class MarketDemandCalculator(BaseEstimator, TransformerMixin):
         return base_model.replace(str(match.group(1)), str(pred_version))
 
     def _calculate_demand_for_row(self, row):
-
         reference_date = pd.to_datetime(row['transaction_date'])
         base_model = row['base_model']
-        
-        history = self.sales_history_
         lookback_start = reference_date - timedelta(days=self.lookback_days)
 
-        demand = history[
-            (history['base_model'] == base_model) &
-            (history['transaction_date'] < reference_date) &
-            (history['transaction_date'] >= lookback_start)
-        ].shape[0]
+        # Define the SQL query to get demand for a specific model
+        query = text("""
+            SELECT COUNT(t.transaction_id)
+            FROM transactions t
+            JOIN products p ON t.product_id = p.product_id
+            WHERE p.base_model = :base_model
+            AND t.transaction_date < :ref_date
+            AND t.transaction_date >= :start_date
+        """)
 
-        if demand == 0:
-            predecessor = self._get_predecessor(base_model)
-            if predecessor and predecessor in self.unique_base_models_:
-                demand = history[
-                    (history['base_model'] == predecessor) &
-                    (history['transaction_date'] < reference_date) &
-                    (history['transaction_date'] >= lookback_start)
-                ].shape[0]
+        with self.db_engine.connect() as connection:
+            # Execute the query for the primary model
+            result = connection.execute(query, {
+                'base_model': base_model,
+                'ref_date': reference_date,
+                'start_date': lookback_start
+            }).scalar_one()
+            demand = result
+
+            # If demand is 0, try the predecessor fallback logic
+            if demand == 0:
+                predecessor = self._get_predecessor(base_model)
+                if predecessor and predecessor in self.unique_base_models_:
+                    # Execute the same query for the predecessor model
+                    pred_result = connection.execute(query, {
+                        'base_model': predecessor,
+                        'ref_date': reference_date,
+                        'start_date': lookback_start
+                    }).scalar_one()
+                    demand = pred_result
 
         return demand
+    
+    def __getstate__(self):
+        # This method is called by pickle when saving the object.
+        # We create a copy of the object's state and remove the unpicklable attribute.
+        state = self.__dict__.copy()
+        if 'db_engine' in state:
+            del state['db_engine']
+        return state
+
+    def __setstate__(self, state):
+        # This method is called by pickle when loading the object.
+        # We restore the saved state and initialize the transient attribute to None.
+        self.__dict__.update(state)
+        self.db_engine = None
 
 class GradeHistoryCalculator(BaseEstimator, TransformerMixin):
     """

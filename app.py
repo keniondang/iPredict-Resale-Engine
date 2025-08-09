@@ -54,16 +54,19 @@ db_engine = get_db_engine()
 
 try:
     print("--- Initializing: Loading Data and Pre-trained Pipelines ---")
-    products_df_global = pd.read_sql("SELECT * FROM products", db_engine)
-    products_df_global['base_model'] = products_df_global['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
-    
-    stores_df_global = pd.read_sql("SELECT * FROM stores", db_engine)
-    
-    price_model_artifact = joblib.load('models/price_model_pipeline.joblib')
-    velocity_model_artifact = joblib.load('models/velocity_model_pipeline.joblib')
-    dynamic_price_artifact = joblib.load('models/dynamic_selling_price_pipeline.joblib')
 
-    recommender = Recommender('models/recommendation_data.joblib', products_df_global)
+    price_model_artifact = joblib.load('models/price_model_pipeline.joblib')
+
+    velocity_model_artifact = joblib.load('models/velocity_model_pipeline.joblib')
+    velocity_model_artifact['pipeline'].named_steps['history_features'].db_engine = db_engine
+
+    dynamic_price_artifact = joblib.load('models/dynamic_selling_price_pipeline.joblib')
+    for model_name, pipeline in dynamic_price_artifact['models'].items():
+        pipeline.named_steps['demand_calculator'].db_engine = db_engine
+
+    print("  - Loading product data for recommender initialization...")
+    products_for_recommender = pd.read_sql("SELECT product_id, model_name, product_type FROM products", db_engine)
+    recommender = Recommender('models/recommendation_data.joblib', products_for_recommender)
     discontinuation_list_global = joblib.load('models/discontinuation_list.joblib')
     discontinuation_id_set = {item['product_id'] for item in discontinuation_list_global}
     
@@ -77,18 +80,18 @@ except Exception as e:
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
-
-    phone_models = products_df_global[products_df_global['product_type'] == 'Used Phone']['model_name'].unique().tolist()
-
-    return jsonify(sorted(phone_models))
+    query = text("SELECT model_name FROM products WHERE product_type = 'Used Phone' ORDER BY model_name")
+    with db_engine.connect() as connection:
+        phone_models = [row[0] for row in connection.execute(query).fetchall()]
+    return jsonify(phone_models)
 
 @app.route('/api/stores', methods=['GET'])
 def get_stores():
-
-    physical_stores = stores_df_global[stores_df_global['store_name'] != 'Online Store']
-    stores_list = physical_stores[['store_id', 'store_name']].to_dict('records')
-
-    return jsonify(sorted(stores_list, key=lambda x: x['store_name']))
+    query = text("SELECT store_id, store_name FROM stores WHERE store_name != 'Online Store' ORDER BY store_name")
+    with db_engine.connect() as connection:
+        # ._mapping gives us dict-like rows
+        stores_list = [dict(row._mapping) for row in connection.execute(query).fetchall()]
+    return jsonify(stores_list)
 
 @app.route('/api/appraise/buy', methods=['POST'])
 def appraise_buy():
@@ -102,7 +105,9 @@ def appraise_buy():
     grade = data.get('grade')
     desired_profit = float(data.get('desired_profit', 0))
 
-    phone_info = products_df_global[products_df_global['model_name'] == model_name]
+    query = text("SELECT * FROM products WHERE model_name = :model_name")
+    with db_engine.connect() as connection:
+        phone_info = pd.read_sql(query, connection, params={"model_name": model_name})
     
     if phone_info.empty:
         return jsonify({"error": f"Model '{model_name}' not found."}), 404
@@ -153,74 +158,93 @@ def appraise_buy():
 
 @app.route('/api/inventory/buy', methods=['POST'])
 def buy_inventory():
-
     data = request.get_json()
     model_name, grade, store_id, acquisition_price = data.get('model_name'), data.get('grade'), data.get('store_id'), data.get('acquisition_price')
 
     if not all([model_name, grade, store_id, acquisition_price]):
-        return jsonify({"error": "All fields are required"}), 400
+        return jsonify({"error": "All fields (model_name, grade, store_id, acquisition_price) are required"}), 400
 
     try:
-        product_details = products_df_global[products_df_global['model_name'] == model_name].iloc[0]
-        product_id = product_details['product_id']
-        release_date = pd.to_datetime(product_details['release_date'])
+        # Fetch required product details directly from the database
+        query = text("SELECT product_id, release_date FROM products WHERE model_name = :model_name")
+        with db_engine.connect() as connection:
+            product_details = connection.execute(query, {"model_name": model_name}).fetchone()
+
+        # Handle case where the model name doesn't exist in the DB
+        if not product_details:
+            return jsonify({"error": f"Model '{model_name}' not found."}), 404
+
+        # Extract details from the query result
+        product_id = product_details.product_id
+        release_date = pd.to_datetime(product_details.release_date)
         acquisition_date = datetime.now()
         age_at_acquisition = (acquisition_date - release_date).days
-        
+
         with db_engine.connect() as connection:
             transaction = connection.begin()
             try:
                 max_unit_id_result = connection.execute(text("SELECT MAX(unit_id) FROM inventory_units")).scalar()
                 new_unit_id = (max_unit_id_result or 0) + 1
+
                 insert_query = text("""
                     INSERT INTO inventory_units (unit_id, product_id, store_id, acquisition_date, grade, age_at_acquisition_days, acquisition_price, status)
                     VALUES (:unit_id, :product_id, :store_id, :acquisition_date, :grade, :age_at_acquisition_days, :acquisition_price, 'In Stock')
                 """)
                 connection.execute(insert_query, {
-                    "unit_id": new_unit_id, "product_id": int(product_id), "store_id": int(store_id),
-                    "acquisition_date": acquisition_date.strftime('%Y-%m-%d'), "grade": grade,
-                    "age_at_acquisition_days": age_at_acquisition, "acquisition_price": float(acquisition_price)
+                    "unit_id": new_unit_id,
+                    "product_id": int(product_id),
+                    "store_id": int(store_id),
+                    "acquisition_date": acquisition_date.strftime('%Y-%m-%d'),
+                    "grade": grade,
+                    "age_at_acquisition_days": age_at_acquisition,
+                    "acquisition_price": float(acquisition_price)
                 })
                 transaction.commit()
 
                 return jsonify({"success": True, "unit_id": new_unit_id})
-            
+
             except Exception as e:
                 transaction.rollback()
-                return jsonify({"error": f"Database error: {e}"}), 500
-            
-    except IndexError:
-        return jsonify({"error": f"Model '{model_name}' not found."}), 404
-    
+                print(f"Database transaction failed: {e}") # Log the error for debugging
+                return jsonify({"error": f"Database error occurred during transaction."}), 500
+
     except Exception as e:
-        return jsonify({"error": f"An unexpected error occurred: {e}"}), 500
+        print(f"An unexpected error occurred in buy_inventory: {e}") # Log the error
+        return jsonify({"error": f"An unexpected server error occurred."}), 500
 
 
 @app.route('/api/inventory/price', methods=['POST'])
 def predict_dynamic_sell_price():
-
     if not dynamic_price_artifact:
         return jsonify({"error": "Dynamic price predictor not loaded"}), 500
-        
+
     data = request.get_json()
     unit_id = int(data.get('unit_id'))
 
+    # --- Start of Fix ---
+    # The query now joins inventory_units and products to get all details at once.
+    query = text("""
+        SELECT i.*, p.*
+        FROM inventory_units i
+        JOIN products p ON i.product_id = p.product_id
+        WHERE i.unit_id = :uid
+    """)
     with db_engine.connect() as conn:
-        unit_info = pd.read_sql(text("SELECT * FROM inventory_units WHERE unit_id = :uid"), conn, params={"uid": unit_id})
-    
-    if unit_info.empty:
+        full_details = pd.read_sql(query, conn, params={"uid": unit_id})
+    # --- End of Fix ---
+
+    if full_details.empty:
         return jsonify({"error": f"Unit ID {unit_id} not found."}), 404
-        
-    full_details = pd.merge(unit_info, products_df_global, on='product_id')
+
     full_details['transaction_date'] = datetime.now()
 
     predictions = {
         name: round(pipe.predict(full_details)[0], 2)
         for name, pipe in dynamic_price_artifact['models'].items()
     }
-    
+
     unit_data = full_details.iloc[0].to_dict()
-    
+
     response_data = {
         "unit_id": int(unit_data['unit_id']),
         "model_name": unit_data['model_name'],
@@ -230,14 +254,15 @@ def predict_dynamic_sell_price():
         "acquisition_price": float(unit_data['acquisition_price']) if pd.notna(unit_data['acquisition_price']) else None,
         "predicted_selling_price_range": predictions
     }
-
     return jsonify(response_data)
 
 @app.route('/api/inventory/combined', methods=['GET'])
 def get_combined_inventory():
-
     try:
+        # --- Start of Fix ---
+        # Query for all necessary data tables at the beginning
         with db_engine.connect() as connection:
+            stores_df = pd.read_sql("SELECT * FROM stores", connection)
             phones_df = pd.read_sql(text("""
                 SELECT i.unit_id, i.grade, i.acquisition_date, i.store_id, p.* FROM inventory_units i
                 JOIN products p ON i.product_id = p.product_id WHERE i.status = 'In Stock'
@@ -247,53 +272,71 @@ def get_combined_inventory():
                 JOIN products p ON ai.product_id = p.product_id JOIN stores s ON ai.store_id = s.store_id
                 WHERE ai.quantity > 0
             """), connection)
+        # --- End of Fix ---
 
         if not phones_df.empty:
-            phones_df['base_model'] = phones_df['model_name'].str.extract(r'(iPhone \d{1,2}(?: Pro| Plus| Pro Max| Mini)?)')[0]
             phones_df['velocity_label'] = velocity_model_artifact['pipeline'].predict(phones_df)
-        
+
         if not accessories_df.empty:
             accessories_df['discontinuation_label'] = accessories_df['product_id'].apply(
                 lambda x: 'Discontinuation Alert' if x in discontinuation_id_set else None)
 
-        response_data = {s['store_name']: {"summary": {}, "phones": [], "accessories": []} for _, s in stores_df_global[stores_df_global['location_type'] == 'Physical Store'].iterrows()}
+        # Use the local stores_df (queried above) to initialize the response
+        physical_stores = stores_df[stores_df['location_type'] == 'Physical Store']
+        response_data = {s['store_name']: {"summary": {}, "phones": [], "accessories": []} for _, s in physical_stores.iterrows()}
 
         for store_name, group in accessories_df.groupby('store_name'):
             if store_name in response_data:
                 response_data[store_name]['accessories'] = group.to_dict('records')
-        
-        phones_with_stores = pd.merge(phones_df, stores_df_global[['store_id', 'store_name']], on='store_id')
+
+        # Use the local stores_df (queried above) for the merge operation
+        phones_with_stores = pd.merge(phones_df, stores_df[['store_id', 'store_name']], on='store_id')
 
         for store_name, group in phones_with_stores.groupby('store_name'):
             if store_name in response_data:
                 clean_group = group.replace({np.nan: None, pd.NaT: None})
                 response_data[store_name]['phones'] = clean_group.to_dict('records')
-        
+
         for store in response_data:
             response_data[store]['summary']['phone_units'] = len(response_data[store]['phones'])
             response_data[store]['summary']['accessory_types'] = len(response_data[store]['accessories'])
 
         return jsonify(response_data)
-    
+
     except Exception as e:
         traceback.print_exc()
-
         return jsonify({"error": f"Could not load combined inventory: {e}"}), 500
 
 @app.route('/api/recommend/accessories', methods=['POST'])
 def get_accessory_recommendations():
-
     data = request.get_json()
     phone_model_name = data.get('phone_model_name')
-    recommended_ids = recommender.recommend_accessories(phone_model_name=phone_model_name, top_n=3)
-    if not recommended_ids: return jsonify([])
-    
-    recommended_products = products_df_global[products_df_global['product_id'].isin(recommended_ids)]
-    ordered_products = recommended_products.set_index('product_id').loc[recommended_ids].reset_index()
-    
+    if not phone_model_name:
+        return jsonify({"error": "phone_model_name is required"}), 400
 
+    recommended_ids = recommender.recommend_accessories(phone_model_name=phone_model_name, top_n=3)
+    if not recommended_ids:
+        return jsonify([])
+
+    # Create safe placeholders for the IN clause to prevent SQL injection
+    placeholders = ", ".join([f":id_{i}" for i in range(len(recommended_ids))])
+    params = {f"id_{i}": pid for i, pid in enumerate(recommended_ids)}
+
+    # Fetch the product details for the recommended IDs directly from the database
+    query = text(f"SELECT * FROM products WHERE product_id IN ({placeholders})")
+    with db_engine.connect() as connection:
+        recommended_products = pd.read_sql(query, connection, params=params)
+
+    if recommended_products.empty:
+        return jsonify([])
+
+    # The recommender provides a ranked list. We must return the products
+    # in the same order as the original recommendation.
+    ordered_products = recommended_products.set_index('product_id').loc[recommended_ids].reset_index()
+
+    # Clean up for JSON serialization
     clean_products = ordered_products.replace({np.nan: None, pd.NaT: None})
-    
+
     return jsonify(clean_products.to_dict('records'))
 
 
@@ -429,27 +472,37 @@ def get_transaction_history():
 
 @app.route('/api/recommend/accessories/instock', methods=['POST'])
 def get_instock_accessory_recommendations():
-
     data = request.get_json()
     phone_model_name, store_id = data.get('phone_model_name'), data.get('store_id')
     recommended_ids = recommender.recommend_accessories(phone_model_name=phone_model_name, top_n=5)
-    if not recommended_ids: return jsonify([])
-    
+    if not recommended_ids:
+        return jsonify([])
+
     placeholders = ", ".join([f":p{i}" for i in range(len(recommended_ids))])
     params = {"sid": int(store_id), **{f"p{i}": pid for i, pid in enumerate(recommended_ids)}}
-    
+
     with db_engine.connect() as connection:
-        instock_ids = {row[0] for row in connection.execute(text(f"SELECT product_id FROM accessory_inventory WHERE store_id = :sid AND quantity > 0 AND product_id IN ({placeholders})"), params).fetchall()}
+        instock_ids_query = text(f"SELECT product_id FROM accessory_inventory WHERE store_id = :sid AND quantity > 0 AND product_id IN ({placeholders})")
+        instock_ids = {row[0] for row in connection.execute(instock_ids_query, params).fetchall()}
 
     final_recommendations = [pid for pid in recommended_ids if pid in instock_ids][:3]
-    if not final_recommendations: return jsonify([])
+    if not final_recommendations:
+        return jsonify([])
 
-    recommended_products = products_df_global[products_df_global['product_id'].isin(final_recommendations)]
+    # --- Start of Fix ---
+    # Fetch product details directly from the database instead of using a global df.
+    placeholders_final = ", ".join([f":id_{i}" for i in range(len(final_recommendations))])
+    params_final = {f"id_{i}": pid for i, pid in enumerate(final_recommendations)}
+    products_query = text(f"SELECT * FROM products WHERE product_id IN ({placeholders_final})")
+
+    with db_engine.connect() as connection:
+        recommended_products = pd.read_sql(products_query, connection, params=params_final)
+    # --- End of Fix ---
+
     ordered_products = recommended_products.set_index('product_id').loc[final_recommendations].reset_index()
     clean_products = ordered_products.replace({np.nan: None, pd.NaT: None})
 
     return jsonify(clean_products.to_dict('records'))
-
 @app.route('/api/inventory/accessories/<int:store_id>', methods=['GET'])
 def get_all_store_accessories(store_id):
 
