@@ -5,9 +5,9 @@ import joblib
 import os
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, mean_absolute_error
-from model_trainer import get_db_engine
 from feature_engineering import TargetDefiner
 from app import Recommender
+from database_utils import get_db_engine
 
 def evaluate_price_model(products_df, inventory_df):
     """Loads the acquisition price pipeline and evaluates its MAE on the test set."""

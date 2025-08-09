@@ -17,6 +17,7 @@ class DateFeatureCalculator(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
+        
         X_transformed = X.copy()
         X_transformed[self.reference_date_col] = pd.to_datetime(X_transformed[self.reference_date_col])
         X_transformed['release_date'] = pd.to_datetime(X_transformed['release_date'])

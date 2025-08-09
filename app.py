@@ -9,25 +9,7 @@ from flask_cors import CORS
 from datetime import datetime
 from sqlalchemy import create_engine
 import urllib
-
-SERVER_NAME = "localhost\\SQLEXPRESS"
-DATABASE_NAME = "UsedPhoneResale"
-
-def get_db_engine():
-    """Creates and returns a SQLAlchemy engine for SQL Server."""
-    try:
-        params = urllib.parse.quote_plus(
-            f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-            f"SERVER={SERVER_NAME};"
-            f"DATABASE={DATABASE_NAME};"
-            f"Trusted_Connection=yes;"
-        )
-        connection_string = f"mssql+pyodbc:///?odbc_connect={params}"
-        engine = create_engine(connection_string)
-        return engine
-    except Exception as e:
-        print(f"FATAL: Could not create database engine. Error: {e}")
-        return None
+from database_utils import get_db_engine
 
 class Recommender:
     """Uses pre-built recommendation data to provide accessory suggestions."""

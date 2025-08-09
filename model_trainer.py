@@ -19,32 +19,7 @@ from feature_engineering import (
     GradeHistoryCalculator,
     TargetDefiner
 )
-
-SERVER_NAME = "localhost\\SQLEXPRESS"
-DATABASE_NAME = "UsedPhoneResale"
-
-def get_db_engine():
-    try:
-        params = urllib.parse.quote_plus(f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={SERVER_NAME};DATABASE={DATABASE_NAME};Trusted_Connection=yes;")
-        engine = create_engine(f"mssql+pyodbc:///?odbc_connect={params}")
-        connection = engine.connect()
-        connection.close()
-        print(f"Successfully created DB engine for SQL Server: {SERVER_NAME}, DB: {DATABASE_NAME}")
-        return engine
-    except Exception as e:
-        print(f"FATAL: Could not create database engine. Error: {e}")
-        return None
-
-def load_data_from_db(engine, table_name):
-    try:
-        print(f"  - Loading table: '{table_name}'...")
-        query = f"SELECT * FROM {table_name}"
-        df = pd.read_sql(query, engine)
-        print(f"    ...Done. Loaded {len(df)} rows.")
-        return df
-    except Exception as e:
-        print(f"Error loading table {table_name}: {e}")
-        return pd.DataFrame()
+from database_utils import get_db_engine, load_data_from_db
 
 def train_price_model(inventory: pd.DataFrame, products: pd.DataFrame, models_dir: str):
     print("\n--- [Task] Training Buying Price Prediction Model ---")

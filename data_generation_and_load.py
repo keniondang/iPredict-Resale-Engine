@@ -7,6 +7,7 @@ from typing import Tuple, Dict, List
 import os
 from sqlalchemy import create_engine
 import urllib
+from database_utils import SERVER_NAME as DB_SERVER_NAME, DATABASE_NAME as DB_NAME
 
 START_DATE = datetime(2020, 8, 5)
 END_DATE = datetime.now()
@@ -15,8 +16,6 @@ NUM_ACCESSORY_SALES = 10000
 PHYSICAL_STORE_IDS = [1, 2, 3]
 ALL_STORE_IDS = [1, 2, 3, 4]
 fake = Faker()
-DB_SERVER_NAME = "localhost\\SQLEXPRESS"
-DB_NAME = "UsedPhoneResale"
 
 def calculate_realistic_acquisition_price(
     product_details: pd.Series, acquisition_date: datetime.date, grade: str
