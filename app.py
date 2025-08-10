@@ -10,6 +10,7 @@ from datetime import datetime
 from sqlalchemy import create_engine
 import urllib
 from database_utils import get_db_engine
+from feature_engineering import DateFeatureCalculator
 
 class Recommender:
     """Uses pre-built recommendation data to provide accessory suggestions."""
@@ -56,6 +57,8 @@ try:
     print("--- Initializing: Loading Data and Pre-trained Pipelines ---")
 
     price_model_artifact = joblib.load('models/price_model_pipeline.joblib')
+    price_model_explainer = price_model_artifact.get('explainer')
+    price_model_feature_names = price_model_artifact.get('feature_names')
 
     velocity_model_artifact = joblib.load('models/velocity_model_pipeline.joblib')
     velocity_model_artifact['pipeline'].named_steps['history_features'].db_engine = db_engine
@@ -75,6 +78,7 @@ try:
 except Exception as e:
     print(f"FATAL ERROR: Failed to initialize. Details: {e}")
     price_model_artifact = velocity_model_artifact = dynamic_price_artifact = None
+    price_model_explainer = price_model_feature_names = None
     recommender = discontinuation_list_global = discontinuation_id_set = None
 
 
@@ -97,7 +101,6 @@ def get_stores():
 def appraise_buy():
 
     if not all([price_model_artifact, velocity_model_artifact, dynamic_price_artifact]):
-
         return jsonify({"error": "Predictor models not loaded"}), 500
 
     data = request.get_json()
@@ -112,7 +115,7 @@ def appraise_buy():
     if phone_info.empty:
         return jsonify({"error": f"Model '{model_name}' not found."}), 404
         
-    appraisal_df = pd.DataFrame([{
+    appraisal_data = {
         'product_id': phone_info.iloc[0]['product_id'],
         'model_name': model_name,
         'base_model': phone_info.iloc[0]['base_model'],
@@ -124,14 +127,53 @@ def appraise_buy():
         'successor_release_date': phone_info.iloc[0]['successor_release_date'],
         'acquisition_date': datetime.now(),
         'transaction_date': datetime.now()
-    }])
+    }
+    appraisal_df = pd.DataFrame([appraisal_data])
 
+    date_calculator = DateFeatureCalculator(reference_date_col='acquisition_date')
+    appraisal_df = date_calculator.fit_transform(appraisal_df)
+    
     price_predictions = {
         name: round(pipe.predict(appraisal_df)[0], 2)
         for name, pipe in price_model_artifact['models'].items()
     }
-    
-    velocity_prediction = velocity_model_artifact['pipeline'].predict(appraisal_df)[0]
+    appraisal_df['acquisition_price'] = price_predictions['median']
+
+    appraisal_df['price_vs_msrp_ratio'] = appraisal_df['acquisition_price'] / appraisal_df['original_msrp']
+    appraisal_df['days_since_release_vs_tier'] = appraisal_df['days_since_model_release'] / appraisal_df['model_tier']
+
+    # ==============================================================================
+    # THE FIX: Restore the 90-day sales count query here
+    # ==============================================================================
+    recent_sales_query = text("""
+        SELECT COUNT(*) as sales_count
+        FROM transactions t
+        JOIN inventory_units i ON t.unit_id = i.unit_id
+        WHERE i.product_id = :product_id AND i.grade = :grade
+        AND t.transaction_date >= DATEADD(day, -90, GETDATE())
+    """)
+    with db_engine.connect() as connection:
+        sales_count_90d = connection.execute(recent_sales_query, {
+            'product_id': int(appraisal_df.iloc[0]['product_id']),
+            'grade': grade
+        }).scalar() or 0
+    # ==============================================================================
+
+    predicted_days_in_stock = velocity_model_artifact['pipeline'].predict(appraisal_df)[0]
+    predicted_days = round(predicted_days_in_stock)
+
+    if predicted_days > 90:
+        velocity_label = "Aging Inventory"
+        velocity_reason = f"Predicted to takes over {predicted_days} days to sell."
+    else:
+        velocity_label = "Prime Inventory"
+        velocity_reason = f"Predicted to sell within {predicted_days} days."
+
+    # Use the newly queried sales_count_90d in the response
+    velocity_stats = {
+        "reason": velocity_reason,
+        "sales_count": sales_count_90d
+    }
     
     selling_price_predictions = {
         name: round(pipe.predict(appraisal_df)[0], 2)
@@ -146,14 +188,40 @@ def appraise_buy():
     
     market_alert = bool(price_predictions.get("median", 0) > profit_target_range["high"])
 
+    explanation_data = []
+    if price_model_explainer is not None and price_model_feature_names is not None:
+        try:
+            median_pipeline = price_model_artifact['models']['median']
+            appraisal_df_transformed = median_pipeline.named_steps['preprocessor'].transform(
+                median_pipeline.named_steps['feature_calculator'].transform(appraisal_df)
+            )
+            if hasattr(appraisal_df_transformed, "toarray"):
+                appraisal_df_transformed = appraisal_df_transformed.toarray()
+            df_to_explain = pd.DataFrame(appraisal_df_transformed, columns=price_model_feature_names)
+            shap_values = price_model_explainer.shap_values(df_to_explain)[0]
+            feature_impacts = list(zip(price_model_feature_names, shap_values))
+            feature_impacts = [item for item in feature_impacts if item[1] != 0]
+            feature_impacts.sort(key=lambda x: abs(x[1]), reverse=True)
+            explanation_data = [
+                {'feature': name.replace('categorical__', '').replace('numerical__', '').replace('_', ' '), 'impact': round(impact, 2)}
+                for name, impact in feature_impacts[:7]
+            ]
+        except Exception as e:
+            traceback.print_exc()
+            print(f"SHAP explanation failed: {e}")
+
     return jsonify({
         "model_appraised": model_name,
         "grade": grade,
         "historically_based_buy_price": price_predictions,
-        "predicted_sales_velocity": str(velocity_prediction),
+        "predicted_sales_velocity": velocity_label,
+        "velocity_reason": velocity_stats.get('reason'),
+        # Pass the correct sales count to the frontend
+        "sales_count_90d": velocity_stats.get('sales_count'),
         "predicted_selling_price_range": selling_price_predictions,
         "profit_targeted_buy_price_range": {k: round(v, 2) for k, v in profit_target_range.items()},
-        "market_alert": market_alert
+        "market_alert": market_alert,
+        "explanation": explanation_data
     })
 
 @app.route('/api/inventory/buy', methods=['POST'])
@@ -503,6 +571,7 @@ def get_instock_accessory_recommendations():
     clean_products = ordered_products.replace({np.nan: None, pd.NaT: None})
 
     return jsonify(clean_products.to_dict('records'))
+
 @app.route('/api/inventory/accessories/<int:store_id>', methods=['GET'])
 def get_all_store_accessories(store_id):
 

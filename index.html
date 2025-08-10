@@ -71,9 +71,6 @@
                  <button data-tab="history" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none flex-shrink-0">
                     Transaction History
                 </button>
-                 <button data-tab="recommendations" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none flex-shrink-0">
-                    Accessory Cross-Sell
-                </button>
                 <button data-tab="forecast" class="tab-button py-4 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 focus:outline-none flex-shrink-0">
                     Demand Forecast
                 </button>
@@ -115,6 +112,11 @@
                                 <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
                             </div>
                             <div id="appraisal-results" class="space-y-4"></div>
+                        <div id="appraisal-explanation" class="pt-4 mt-4 border-t space-y-2 hidden">
+                            <h3 class="text-sm font-medium text-gray-700">Key Price Drivers</h3>
+                            <p class="text-xs text-gray-500">Factors pushing the price up (green) or down (red) from the average buy price.</p>
+                            <div id="explanation-bars" class="space-y-1"></div>
+                        </div>
                         </div>
                          <div id="purchase-section" class="bg-white p-6 rounded-xl shadow-sm hidden">
                             <h2 class="text-xl font-semibold mb-2">Finalize Purchase</h2>
@@ -230,28 +232,6 @@
                                     </table>
                                 </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="recommendations-content" class="tab-pane hidden">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="md:col-span-1 bg-white p-6 rounded-xl shadow-sm">
-                        <h2 class="text-xl font-semibold mb-4">Accessory Recommendations</h2>
-                        <form id="recommendation-form" class="space-y-4">
-                            <div>
-                                <label for="recommendation-model" class="block text-sm font-medium text-gray-700">Phone Model</label>
-                                <select id="recommendation-model" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"></select>
-                            </div>
-                            <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Get Recommendations</button>
-                        </form>
-                    </div>
-                    <div id="recommendation-results-container" class="md:col-span-2 bg-white p-6 rounded-xl shadow-sm hidden">
-                        <h2 class="text-xl font-semibold mb-4">Top 3 Recommended Accessories</h2>
-                        <div id="recommendation-loader" class="flex justify-center items-center h-48 hidden">
-                            <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12"></div>
-                        </div>
-                        <div id="recommendation-results" class="space-y-3"></div>
                     </div>
                 </div>
             </div>
@@ -420,7 +400,7 @@
         async function populatePhoneModels() {
             try {
                 const models = await apiFetch('/products');
-                const selects = [document.getElementById('appraisal-model'), document.getElementById('recommendation-model'), document.getElementById('history-model'), document.getElementById('forecast-model')];
+                const selects = [document.getElementById('appraisal-model'), document.getElementById('history-model'), document.getElementById('forecast-model')];
                 selects.forEach(select => {
                     if (select) {
                         const firstOption = select.options[0] ? select.options[0].outerHTML : '';
@@ -461,13 +441,38 @@
             try {
                 const data = await apiFetch('/appraise/buy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_name: model, grade: grade, desired_profit: desiredProfit }) });
                 currentPurchaseInfo = { model_name: data.model_appraised, grade: data.grade };
-                const velocityColor = data.predicted_sales_velocity === 'Fast Mover' ? 'text-green-600' : data.predicted_sales_velocity === 'Medium Mover' ? 'text-yellow-600' : 'text-red-600';
+                const velocityColor = data.predicted_sales_velocity === 'Prime Inventory' ? 'text-green-600' : 
+                     data.predicted_sales_velocity === 'Fast Mover' ? 'text-green-600' : 
+                     data.predicted_sales_velocity === 'Medium Mover' ? 'text-yellow-600' : 'text-red-600';
                 let marketAlertHtml = data.market_alert ? `<div class="p-4 border-l-4 border-yellow-400 bg-yellow-50"><div class="flex"><div class="flex-shrink-0"><svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.257 3.099c.636-1.026 2.287-1.026 2.923 0l5.613 9.043c.642 1.033-.173 2.358-1.462 2.358H4.105c-1.289 0-2.104-1.325-1.462-2.358l5.614-9.043zM10 12a1 1 0 110-2 1 1 0 010 2zm-1-4a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clip-rule="evenodd" /></svg></div><div class="ml-3"><p class="text-sm text-yellow-700">Market Shift Alert: Your historical buy price for this model is higher than the current market can support for a profit. Proceed with caution.</p></div></div></div>` : '';
-                resultsDiv.innerHTML = `<div class="space-y-6"><div><p class="text-sm text-gray-500">Model Appraised</p><p class="text-lg font-semibold">${data.model_appraised} (Grade: ${data.grade})</p></div>${marketAlertHtml}<div class="p-4 border-2 border-green-500 rounded-lg bg-green-50"><p class="text-sm font-medium text-green-800 text-center">Primary Recommendation: Target Buy Price</p><p class="text-center text-sm text-gray-600 mt-1">To make a <span class="font-bold">$${desiredProfit}</span> profit, you should offer:</p><p class="text-4xl font-bold text-center my-2 text-green-600">$${data.profit_targeted_buy_price_range.low.toFixed(2)} - $${data.profit_targeted_buy_price_range.high.toFixed(2)}</p><p class="text-xs text-center text-gray-500">(Median Target: $${data.profit_targeted_buy_price_range.median.toFixed(2)})</p></div><div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t"><div class="p-3 border rounded-lg"><p class="text-sm font-medium text-gray-700">Historically-Based Buy Price</p><p class="text-sm text-gray-500 mb-1">(What you've paid in the past)</p><p class="text-lg font-semibold text-indigo-600">$${data.historically_based_buy_price.low.toFixed(2)} - $${data.historically_based_buy_price.high.toFixed(2)}</p><p class="text-sm text-gray-500">Median: $${data.historically_based_buy_price.median.toFixed(2)}</p></div><div class="p-3 border rounded-lg"><p class="text-sm font-medium text-gray-700">Predicted Sales Velocity</p><p class="text-lg font-semibold ${velocityColor}">${data.predicted_sales_velocity}</p><p class="text-xs text-gray-500 mt-1">${data.velocity_reason || ''}</p></div></div></div>`;
+                
+                // --- START: Updated results HTML with sales count ---
+                resultsDiv.innerHTML = `<div class="space-y-6"><div><p class="text-sm text-gray-500">Model Appraised</p><p class="text-lg font-semibold">${data.model_appraised} (Grade: ${data.grade})</p></div>${marketAlertHtml}<div class="p-4 border-2 border-green-500 rounded-lg bg-green-50"><p class="text-sm font-medium text-green-800 text-center">Primary Recommendation: Target Buy Price</p><p class="text-center text-sm text-gray-600 mt-1">To make a <span class="font-bold">$${desiredProfit}</span> profit, you should offer:</p><p class="text-4xl font-bold text-center my-2 text-green-600">$${data.profit_targeted_buy_price_range.low.toFixed(2)} - $${data.profit_targeted_buy_price_range.high.toFixed(2)}</p><p class="text-xs text-center text-gray-500">(Median Target: $${data.profit_targeted_buy_price_range.median.toFixed(2)})</p></div><div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t"><div class="p-3 border rounded-lg"><p class="text-sm font-medium text-gray-700">Historically-Based Buy Price</p><p class="text-sm text-gray-500 mb-1">(What you've paid in the past)</p><p class="text-lg font-semibold text-indigo-600">$${data.historically_based_buy_price.low.toFixed(2)} - $${data.historically_based_buy_price.high.toFixed(2)}</p><p class="text-sm text-gray-500">Median: $${data.historically_based_buy_price.median.toFixed(2)}</p></div><div class="p-3 border rounded-lg"><p class="text-sm font-medium text-gray-700">Recent Sales (90d)</p><p class="text-sm text-gray-500 mb-1">(This specific model & grade)</p><p class="text-2xl font-semibold">${data.sales_count_90d} units</p></div><div class="p-3 border rounded-lg"><p class="text-sm font-medium text-gray-700">Predicted Sales Velocity</p><p class="text-lg font-semibold ${velocityColor}">${data.predicted_sales_velocity}</p><p class="text-xs text-gray-500 mt-1">${data.velocity_reason || ''}</p></div></div></div>`;
+                // --- END: Updated results HTML ---
+
+                const explanationContainer = document.getElementById('appraisal-explanation');
+                const explanationBars = document.getElementById('explanation-bars');
+                explanationBars.innerHTML = '';
+
+                if (data.explanation && data.explanation.length > 0) {
+                    const maxImpact = Math.max(...data.explanation.map(e => Math.abs(e.impact)));
+                    data.explanation.forEach(exp => {
+                        const barWidth = maxImpact > 0 ? (Math.abs(exp.impact) / maxImpact) * 100 : 0;
+                        let featureName = exp.feature.replace('base model', 'Model:').replace('model tier', 'Tier:').replace('days since model release', 'Days since release').replace('has successor 1', 'Has successor').replace('grade', 'Grade');
+                        const barHtml = `<div class="flex items-center text-xs text-gray-800"><div class="w-2/5 truncate pr-2" title="${featureName}">${featureName}</div><div class="w-3/5 flex items-center"><div class="h-4 rounded-sm" style="width: ${barWidth}%; background-color: ${exp.impact > 0 ? '#22c55e' : '#ef4444'};"></div><span class="ml-2 font-mono text-gray-600 w-12 text-right">${exp.impact.toFixed(2)}</span></div></div>`;
+                        explanationBars.innerHTML += barHtml;
+                    });
+                    explanationContainer.classList.remove('hidden');
+                } else {
+                    explanationContainer.classList.add('hidden');
+                }
+
                 purchaseSection.classList.remove('hidden');
                 document.getElementById('purchase-summary').innerHTML = `You are about to purchase a <strong>Grade ${data.grade} ${data.model_appraised}</strong>.`;
                 document.getElementById('purchase-price').value = data.profit_targeted_buy_price_range.median.toFixed(2);
-            } catch (error) { showModal({ title: 'Appraisal Failed', message: error.message, cancelText: 'OK', iconType: 'error' }); } 
+            } catch (error) { showModal({ title: 'Appraisal Failed', message: error.message, cancelText: 'OK', iconType: 'error' }); 
+                document.getElementById('appraisal-explanation').classList.add('hidden');
+            } 
             finally { hideLoader('appraisal-loader'); }
         });
         
@@ -1013,22 +1018,6 @@
             } finally {
                 hideLoader('forecast-loader');
             }
-        });
-
-        document.getElementById('recommendation-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const modelName = document.getElementById('recommendation-model').value;
-            if (!modelName) { alert('Please select a Phone Model.'); return; }
-            const resultsContainer = document.getElementById('recommendation-results-container');
-            const resultsDiv = document.getElementById('recommendation-results');
-            showLoader('recommendation-loader');
-            resultsContainer.classList.remove('hidden'); resultsDiv.innerHTML = '';
-            try {
-                const data = await apiFetch('/recommend/accessories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone_model_name: modelName }) });
-                if (data.length === 0) { resultsDiv.innerHTML = `<p class="text-gray-500">No recommendations available for this product.</p>`; } 
-                else { let content = ''; data.forEach(item => { content += `<div class="p-3 border rounded-lg"><p class="font-semibold">${item.model_name}</p><p class="text-sm text-gray-500">Product ID: ${item.product_id} | MSRP: $${item.original_msrp ? item.original_msrp.toFixed(2) : 'N/A'}</p></div>`; }); resultsDiv.innerHTML = content; }
-            } catch (error) { resultsDiv.innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`; } 
-            finally { hideLoader('recommendation-loader'); }
         });
 
         async function loadDiscontinuationList() {

@@ -10,6 +10,7 @@ from sklearn.metrics import classification_report, mean_absolute_error
 import lightgbm as lgb
 from prophet import Prophet
 import joblib
+import shap
 import os
 import argparse
 from datetime import datetime, timedelta
@@ -57,41 +58,156 @@ def train_price_model(inventory: pd.DataFrame, products: pd.DataFrame, models_di
     train_mae = mean_absolute_error(y_train, models['median'].predict(X_train))
     print(f"  - Training MAE (median model): ${train_mae:.2f}")
 
-    joblib.dump({'models': models}, os.path.join(models_dir, 'price_model_pipeline.joblib'))
+    # --- START: NEW CODE TO ADD ---
+    print("\n  - Generating SHAP explainer for the median model...")
+    median_pipeline = models['median']
+    preprocessor_step = median_pipeline.named_steps['preprocessor']
+
+    # Transform the training data to the format the model actually sees
+    X_train_transformed = preprocessor_step.transform(
+        median_pipeline.named_steps['feature_calculator'].transform(X_train)
+    )
+
+    # Create the explainer using the trained model and the transformed data
+    explainer = shap.TreeExplainer(median_pipeline.named_steps['regressor'])
+
+    # Get the feature names after one-hot encoding for later use
+    feature_names = preprocessor_step.get_feature_names_out()
+
+    print("  - Saving models, explainer, and feature names...")
+    # Modify the joblib.dump call to include the explainer and feature names
+    joblib.dump({
+        'models': models,
+        'explainer': explainer,
+        'feature_names': feature_names
+    }, os.path.join(models_dir, 'price_model_pipeline.joblib'))
+    # --- END: NEW CODE TO ADD ---
+
     print(f"Price prediction pipeline saved successfully.")
 
 def train_velocity_model(train_data: pd.DataFrame, grade_history_calculator: GradeHistoryCalculator, models_dir: str):
+    """
+    Trains a regression model to predict the number of days a unit will be in stock.
+    This version is flexible for different models (LGBM, RandomForest, XGBoost) and applies the correct
+    hyperparameter tuning for the selected model.
+    """
+    # ==============================================================================
+    # IMPORTS
+    # ==============================================================================
+    from sklearn.model_selection import RandomizedSearchCV
+    from scipy.stats import randint, uniform
+    from sklearn.ensemble import RandomForestRegressor
+    import xgboost as xgb
+    # ==============================================================================
 
-    print("\n--- [Task] Training Sales Velocity Prediction Model ---")
+    print("\n--- [Task] Training Sales Velocity (Regression & Tuned) Model ---")
 
-    y_train = train_data['mover_category']
-    X_train = train_data
-    print("\nModel Performance on Test Set:") 
+    y_train = train_data['days_in_stock']
+    X_train = train_data.copy()
 
-    final_model_features = [
-        'model_tier', 'storage_gb', 'original_msrp',
-        'grade_specific_sales_last_120d',
-        'grade_specific_avg_days_last_120d'
+    print("  - Calculating date-based features...")
+    date_calculator = DateFeatureCalculator(reference_date_col='transaction_date')
+    X_train = date_calculator.fit_transform(X_train)
+
+    print("  - Engineering new interaction features...")
+    X_train['price_vs_msrp_ratio'] = X_train['acquisition_price'] / X_train['original_msrp']
+    X_train['days_since_release_vs_tier'] = X_train['days_since_model_release'] / X_train['model_tier']
+
+    categorical_features = ['base_model', 'grade', 'model_tier', 'month_of_year', 'is_holiday_season']
+    numerical_features = [
+        'storage_gb',
+        'original_msrp',
+        'acquisition_price',
+        'price_vs_msrp_ratio',
+        'days_since_release_vs_tier',
+        'days_since_model_release',
+        'days_since_successor_release',
+        'has_successor',
+        'grade_specific_sales_last_90d',
+        'grade_specific_avg_days_last_90d'
     ]
-
+    
     preprocessor = ColumnTransformer(
         transformers=[
-            ('selector', 'passthrough', final_model_features)
+            ('categorical', OneHotEncoder(handle_unknown='ignore'), categorical_features),
+            ('numerical', 'passthrough', numerical_features)
         ],
         remainder='drop'
     )
-
+    
+    # ==============================================================================
+    # 2. MODEL PIPELINE: Define the model steps.
+    # Make sure your chosen model is the one that is uncommented.
+    # ==============================================================================
     pipeline = Pipeline(steps=[
         ('history_features', grade_history_calculator),
         ('preprocessor', preprocessor),
-        ('classifier', GradientBoostingClassifier(n_estimators=100, random_state=42))
+        # --- MODEL SELECTION ---
+        # ('regressor', lgb.LGBMRegressor(random_state=42))
+        # ('regressor', RandomForestRegressor(random_state=42, n_jobs=-1))
+        ('regressor', xgb.XGBRegressor(random_state=42, n_jobs=-1))
     ])
-        
-    pipeline.fit(X_train, y_train)
+    
+    # ==============================================================================
+    # 3. HYPERPARAMETER TUNING: Define parameter sets for EACH model.
+    # ==============================================================================
+    param_dist = {}
+    regressor_step = pipeline.named_steps['regressor']
+    
+    if isinstance(regressor_step, lgb.LGBMRegressor):
+        print("  - Using Hyperparameter set for LightGBM.")
+        param_dist = {
+            'regressor__n_estimators': randint(100, 500),
+            'regressor__learning_rate': uniform(0.01, 0.2),
+            'regressor__num_leaves': randint(20, 50)
+        }
+    elif isinstance(regressor_step, RandomForestRegressor):
+        print("  - Using Hyperparameter set for RandomForestRegressor.")
+        param_dist = {
+            'regressor__n_estimators': randint(100, 500),
+            'regressor__max_depth': [None, 10, 20, 30],
+            'regressor__min_samples_split': randint(2, 11)
+        }
+    elif isinstance(regressor_step, xgb.XGBRegressor):
+        print("  - Using Hyperparameter set for XGBoost.")
+        param_dist = {
+            'regressor__n_estimators': randint(100, 500),
+            'regressor__learning_rate': uniform(0.01, 0.2),
+            'regressor__max_depth': randint(3, 10),
+            'regressor__subsample': uniform(0.7, 0.3),
+            'regressor__colsample_bytree': uniform(0.7, 0.3)
+        }
 
-    final_artifact = {'pipeline': pipeline}
-    joblib.dump(final_artifact, os.path.join(models_dir, 'velocity_model_pipeline.joblib'))
-    print(f"Sales velocity pipeline saved successfully.")
+    if param_dist:
+        random_search = RandomizedSearchCV(
+            pipeline,
+            param_distributions=param_dist,
+            n_iter=15,
+            cv=3,
+            scoring='neg_mean_absolute_error',
+            n_jobs=-1,
+            random_state=42,
+            verbose=1
+        )
+        print("  - Searching for best hyperparameters...")
+        random_search.fit(X_train, y_train)
+        best_pipeline = random_search.best_estimator_
+        print(f"\n  - Best parameters found: {random_search.best_params_}")
+    else:
+        print("  - No specific hyperparameter distribution for this model. Fitting with default parameters.")
+        best_pipeline = pipeline
+        best_pipeline.fit(X_train, y_train)
+
+    # ==============================================================================
+    # 4. EVALUATION & SAVING
+    # ==============================================================================
+    y_pred_train = best_pipeline.predict(X_train)
+    train_mae = mean_absolute_error(y_train, y_pred_train)
+
+    print(f"  - Training MAE after tuning: {train_mae:.2f} days")
+
+    joblib.dump({'pipeline': best_pipeline}, os.path.join(models_dir, 'velocity_model_pipeline.joblib'))
+    print(f"Sales velocity (tuned regression) pipeline saved successfully.")
 
 def train_dynamic_selling_price_model(train_data: pd.DataFrame, all_transactions: pd.DataFrame, all_products: pd.DataFrame, db_engine, models_dir: str):
     print("\n--- [Task] Training Dynamic Selling Price Prediction Model ---")

@@ -44,9 +44,7 @@ class MarketDemandCalculator(BaseEstimator, TransformerMixin):
         self.lookback_days = lookback_days
 
     def fit(self, X, y=None):
-        with self.db_engine.connect() as connection:
-            result = connection.execute(text("SELECT DISTINCT base_model FROM products WHERE base_model IS NOT NULL"))
-            self.unique_base_models_ = {row[0] for row in result}
+        # No pre-computation needed anymore, fit does nothing.
         return self
 
     def transform(self, X):
@@ -56,53 +54,29 @@ class MarketDemandCalculator(BaseEstimator, TransformerMixin):
 
         return X_transformed
 
-    def _get_predecessor(self, base_model):
-
-        if not isinstance(base_model, str): return None
-        match = re.search(r'(\d+)', base_model)
-
-        if not match: return None
-        pred_version = int(match.group(1)) - 1
-
-        return base_model.replace(str(match.group(1)), str(pred_version))
-
     def _calculate_demand_for_row(self, row):
         reference_date = pd.to_datetime(row['transaction_date'])
-        base_model = row['base_model']
+        # Use product_id for specific demand signal
+        product_id = row['product_id']
         lookback_start = reference_date - timedelta(days=self.lookback_days)
 
-        # Define the SQL query to get demand for a specific model
+        # Query by product_id instead of base_model
         query = text("""
             SELECT COUNT(t.transaction_id)
             FROM transactions t
-            JOIN products p ON t.product_id = p.product_id
-            WHERE p.base_model = :base_model
+            WHERE t.product_id = :product_id
             AND t.transaction_date < :ref_date
             AND t.transaction_date >= :start_date
         """)
 
         with self.db_engine.connect() as connection:
-            # Execute the query for the primary model
             result = connection.execute(query, {
-                'base_model': base_model,
+                'product_id': int(product_id),
                 'ref_date': reference_date,
                 'start_date': lookback_start
-            }).scalar_one()
-            demand = result
+            }).scalar_one_or_none() or 0
 
-            # If demand is 0, try the predecessor fallback logic
-            if demand == 0:
-                predecessor = self._get_predecessor(base_model)
-                if predecessor and predecessor in self.unique_base_models_:
-                    # Execute the same query for the predecessor model
-                    pred_result = connection.execute(query, {
-                        'base_model': predecessor,
-                        'ref_date': reference_date,
-                        'start_date': lookback_start
-                    }).scalar_one()
-                    demand = pred_result
-
-        return demand
+        return result
     
     def __getstate__(self):
         # This method is called by pickle when saving the object.
@@ -130,17 +104,17 @@ class GradeHistoryCalculator(BaseEstimator, TransformerMixin):
         df_indexed = df.set_index('transaction_date')
         grouping_cols = ['product_id', 'grade']
 
-        sales_counts = df_indexed.groupby(grouping_cols).rolling('120D')['unit_id'].count()
-        avg_days = df_indexed.groupby(grouping_cols).rolling('120D')['days_in_stock'].mean()
+        sales_counts = df_indexed.groupby(grouping_cols).rolling('90D')['unit_id'].count()
+        avg_days = df_indexed.groupby(grouping_cols).rolling('90D')['days_in_stock'].mean()
         
         merged = pd.merge(
-            sales_counts.reset_index(name='grade_specific_sales_last_120d'),
-            avg_days.reset_index(name='grade_specific_avg_days_last_120d'),
+            sales_counts.reset_index(name='grade_specific_sales_last_90d'),
+            avg_days.reset_index(name='grade_specific_avg_days_last_90d'),
             on=['transaction_date', 'product_id', 'grade'], how='outer'
         )
         
-        merged['grade_specific_sales_last_120d'] = merged.groupby(grouping_cols)['grade_specific_sales_last_120d'].shift(1)
-        merged['grade_specific_avg_days_last_120d'] = merged.groupby(grouping_cols)['grade_specific_avg_days_last_120d'].shift(1)
+        merged['grade_specific_sales_last_90d'] = merged.groupby(grouping_cols)['grade_specific_sales_last_90d'].shift(1)
+        merged['grade_specific_avg_days_last_90d'] = merged.groupby(grouping_cols)['grade_specific_avg_days_last_90d'].shift(1)
         
         self.latest_features_ = merged.sort_values('transaction_date').drop_duplicates(subset=grouping_cols, keep='last').set_index(grouping_cols)
 
@@ -149,7 +123,7 @@ class GradeHistoryCalculator(BaseEstimator, TransformerMixin):
     def transform(self, X):
 
         X_transformed = X.copy().set_index(['product_id', 'grade'])
-        X_with_features = X_transformed.join(self.latest_features_[['grade_specific_sales_last_120d', 'grade_specific_avg_days_last_120d']])
+        X_with_features = X_transformed.join(self.latest_features_[['grade_specific_sales_last_90d', 'grade_specific_avg_days_last_90d']])
 
         return X_with_features.reset_index().fillna(0)
 
